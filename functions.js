@@ -38,6 +38,24 @@ module.exports = {
             }).catch(error => reject(error));
         });
     },
+
+    enabizTokenIleGiris: (enabizToken) => {
+        return new Promise((resolve, reject) => {
+            const data = JSON.stringify({
+                "enabizToken": enabizToken,
+                "islemKanali": "VATANDAS_ENABIZ"
+            });
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+            axios.post("https://prd.mhrs.gov.tr/api/vatandas/enabiz/login", data, config).then(resp => {
+                resolve(resp.data);
+            }).catch(error => reject(error));
+        });
+    },
+
     
     kullaniciRandevulari: (token) => {
         return new Promise((resolve, reject) => {
