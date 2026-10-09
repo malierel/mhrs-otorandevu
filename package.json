@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "MHRS Otomatik Randevu Asistanı (Masaüstü Uygulaması)",
   "main": "app/main.js",
+  "engines": {
+    "node": ">=24.21.0"
+  },
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
