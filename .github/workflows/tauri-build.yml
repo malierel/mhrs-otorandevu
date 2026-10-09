@@ -1,0 +1,50 @@
+name: Build Tauri WebView2 App
+
+on:
+  push:
+    branches:
+      - feat/tauri-webview2
+    tags:
+      - 'v*-tauri'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-tauri:
+    runs-on: windows-latest
+
+    steps:
+      - name: Repoyu Klonla
+        uses: actions/checkout@v4
+
+      - name: Node.js Kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Rust Kurulumu
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Bağımlılıkları Yükle
+        run: npm ci
+
+      - name: Tauri Uygulamasını Derle
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'MHRS OtoRandevu Tauri v__VERSION__'
+          releaseBody: 'Lightweight (WebView2) 5-10 MB Windows sürümü.'
+          releaseDraft: false
+          prerelease: false
