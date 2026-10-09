@@ -1,6 +1,6 @@
 const axios = require("axios");
-const dns = require("dns").promises;
-const tls = require("tls");
+const http = require("http");
+const https = require("https");
 
 const turkceKarakterler = "ğüşöçıİĞÜŞÖÇ";
 const ingilizceKarakterler = "gusociIGUSOC";
@@ -9,8 +9,14 @@ for (let i = 0; i < turkceKarakterler.length; i++) {
   karakterMap.set(turkceKarakterler[i], ingilizceKarakterler[i]);
 }
 
+// TCP/TLS el sıkışmalarını tekrar tekrar yapmamak ve 2-3 kat hızlandırmak için Keep-Alive Agent
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+
 // Güvenlik duvarlarını (WAF) aşmak için gerçek tarayıcı başlıkları içeren Axios istemcisi
 const client = axios.create({
+  httpAgent,
+  httpsAgent,
   headers: {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
@@ -29,56 +35,6 @@ const client = axios.create({
 });
 
 module.exports = {
-  diagnoseMhrsConnection: async () => {
-    const host = "prd.mhrs.gov.tr";
-    const port = 443;
-    const results = {
-      host,
-      dns: null,
-      tls: null,
-    };
-
-    try {
-      const lookup = await dns.lookup(host);
-      results.dns = { success: true, ip: lookup.address, family: lookup.family };
-    } catch (e) {
-      results.dns = { success: false, error: e.message };
-      return results;
-    }
-
-    return new Promise((resolve) => {
-      const socket = tls.connect(
-        {
-          host,
-          port,
-          servername: host,
-          timeout: 7000,
-        },
-        () => {
-          results.tls = {
-            success: true,
-            authorized: socket.authorized,
-            protocol: socket.getProtocol(),
-            cipher: socket.getCipher()?.name,
-          };
-          socket.end();
-          resolve(results);
-        }
-      );
-
-      socket.on("error", (err) => {
-        results.tls = { success: false, error: err.message, code: err.code };
-        resolve(results);
-      });
-
-      socket.on("timeout", () => {
-        results.tls = { success: false, error: "Bağlantı zaman aşımına uğradı (Timeout)" };
-        socket.destroy();
-        resolve(results);
-      });
-    });
-  },
-
   yaziSadele: (cumle) => {
     let yeniStr = "";
     for (let i = 0; i < cumle.length; i++) {
@@ -86,14 +42,6 @@ module.exports = {
       yeniStr += karakterMap.has(karakter) ? karakterMap.get(karakter) : karakter;
     }
     return yeniStr.toLowerCase().replaceAll(" ", "");
-  },
-
-  enabizTokenIleGiris: async (enabizToken) => {
-    const resp = await client.post("https://prd.mhrs.gov.tr/api/vatandas/enabiz/login", {
-      enabizToken,
-      islemKanali: "VATANDAS_ENABIZ",
-    });
-    return resp.data;
   },
 
   kullaniciRandevulari: async (token) => {

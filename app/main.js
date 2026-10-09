@@ -396,25 +396,49 @@ async function executeSearchIteration() {
       scheduleNextRun();
     }
   } catch (err) {
+    const status = err.response?.status;
     const errMsg = err.response?.data?.errors?.[0]?.mesaj || err.message;
+
+    // 1. Token süresi dolduysa (401 Unauthorized) taramayı otomatik durdur
+    if (status === 401 || (errMsg && errMsg.toLowerCase().includes("yetkisiz"))) {
+      sendLog("error", "❌ MHRS Oturum Süreniz Doldu! (401 Yetkisiz Erişim)");
+      showNotification("⚠️ MHRS Oturumu Kapandı", "Token süreniz doldu. Lütfen yeni token alıp giriniz.");
+      stopSearchTask();
+      return;
+    }
+
+    // 2. İnternet kesintisi veya sunucu bağlantı hatası durumunda akıllı bekleme (Exponential Backoff)
+    const isNetworkError = err.code === "ECONNRESET" || err.code === "ENOTFOUND" || err.code === "ETIMEDOUT" || !err.response;
+    if (isNetworkError) {
+      consecutiveNetworkErrors++;
+      const waitSeconds = Math.min(300, 30 * Math.pow(1.5, consecutiveNetworkErrors)); // 45s -> 67s -> ... max 5dk
+      sendLog("warning", `📡 İnternet/MHRS bağlantısı bekleniyor (${err.code || "Ağ Hatası"}). ${Math.round(waitSeconds)} sn sonra tekrar denenecek.`);
+      scheduleNextRun(waitSeconds * 1000);
+      return;
+    }
+
+    // Normal API hatası
+    consecutiveNetworkErrors = 0;
     sendLog("error", `MHRS Arama Hatası: ${errMsg}`);
     scheduleNextRun();
   }
 }
 
-function scheduleNextRun() {
+let consecutiveNetworkErrors = 0;
+
+function scheduleNextRun(delayMs = 60000) {
   if (!searchActive) return;
   if (searchTimer) clearTimeout(searchTimer);
-  // 60 saniye sonra bir sonraki kontrol
   searchTimer = setTimeout(() => {
     executeSearchIteration();
-  }, 60000);
+  }, delayMs);
 }
 
 function startSearchTask(criteria) {
   if (criteria) saveConfig(criteria);
   searchActive = true;
   searchAttempts = 0;
+  consecutiveNetworkErrors = 0;
   sendStatusUpdate();
   sendLog("info", "🚀 Randevu tarama görevi başlatıldı.");
   executeSearchIteration();
@@ -423,6 +447,7 @@ function startSearchTask(criteria) {
 
 function stopSearchTask() {
   searchActive = false;
+  consecutiveNetworkErrors = 0;
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = null;
   sendStatusUpdate();
@@ -437,7 +462,20 @@ ipcMain.handle("save-config", (_event, data) => saveConfig(data));
 ipcMain.handle("validate-token", async (_event, token) => {
   try {
     const res = await functions.kullaniciRandevulari(token);
-    return { success: true, count: res?.length || 0 };
+    
+    // Token içerisindeki exp (son kullanma) zamanını çıkar
+    let expiresAt = null;
+    try {
+      const parts = token.replace("Bearer ", "").trim().split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+        if (payload.exp) {
+          expiresAt = payload.exp * 1000;
+        }
+      }
+    } catch (_) {}
+
+    return { success: true, count: res?.length || 0, expiresAt };
   } catch (e) {
     return {
       success: false,

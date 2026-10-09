@@ -134,6 +134,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  let tokenExpiryTimer = null;
+
+  function updateTokenExpiryDisplay(expiresAt) {
+    if (tokenExpiryTimer) clearInterval(tokenExpiryTimer);
+
+    function tick() {
+      if (!expiresAt) {
+        tokenStatusText.innerHTML = `<span class="badge-ok">✅ Token Geçerli</span>`;
+        return;
+      }
+      const diffMs = expiresAt - Date.now();
+      if (diffMs <= 0) {
+        tokenStatusText.innerHTML = `<span class="badge-bad" style="font-weight: 700;">❌ Token Süresi Dolmuş!</span>`;
+        if (tokenExpiryTimer) clearInterval(tokenExpiryTimer);
+        return;
+      }
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diffMs % (1000 * 60)) / 1000);
+      tokenStatusText.innerHTML = `
+        <span class="badge-ok" style="font-weight: 700;">✅ Token Aktif</span>
+        <span style="color: #475569; font-weight: 600; font-family: monospace;">⏳ Kalan: ${hours} sa ${mins} dk ${secs} sn</span>
+      `;
+    }
+
+    tick();
+    tokenExpiryTimer = setInterval(tick, 1000);
+  }
+
   // Token doğrulama ve kaydetme
   btnSaveToken.addEventListener("click", async () => {
     let rawToken = inputToken.value.trim();
@@ -151,11 +180,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const res = await window.api.validateToken(rawToken);
     if (res.success) {
-      tokenStatusText.innerHTML = `<span class="badge-ok">✅ Token Geçerli! (${res.count} aktif randevu)</span>`;
+      updateTokenExpiryDisplay(res.expiresAt);
       appendLog("success", `Token doğrulandı! Kullanıcı oturumu açık.`);
       await window.api.saveConfig({ token: rawToken });
       loadCitiesList(config.ilPlaka);
     } else {
+      if (tokenExpiryTimer) clearInterval(tokenExpiryTimer);
       tokenStatusText.innerHTML = `<span class="badge-bad">❌ Geçersiz: ${res.error}</span>`;
       appendLog("error", `Token hatası: ${res.error}`);
     }
@@ -341,10 +371,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     setRunningState(status.active);
   });
 
+  function playSuccessSound() {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.6);
+    } catch (_) {}
+  }
+
   window.api.onAppointmentBooked((appointment) => {
     bookedBanner.style.display = "flex";
     bookedDetails.textContent = `${appointment.hekim} • ${appointment.tarih} (${appointment.hastane})`;
     setRunningState(false);
+    playSuccessSound();
   });
 
   // Eğer token varsa açılışta hemen doğrulamayı dene
