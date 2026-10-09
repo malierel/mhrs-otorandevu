@@ -335,7 +335,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         otomatikAl: true,
       };
 
-      await window.api.startSearch(searchCriteria);
+      const res = await window.api.startSearch(searchCriteria);
+      if (res && res.success === false) {
+        alert(`Arama başlatılamadı:\n${res.error}`);
+        setRunningState(false);
+        return;
+      }
       setRunningState(true);
     } else {
       await window.api.stopSearch();
@@ -345,6 +350,40 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function setRunningState(running) {
     isRunning = running;
+    
+    // Form elemanlarını tarama sırasında kilitle / aç (UI/UX)
+    const formControls = [
+      inputToken,
+      btnSaveToken,
+      selectCity,
+      selectDistrict,
+      selectClinic,
+      dateStart,
+      dateEnd,
+      chkAllDay,
+      timeStart,
+      timeEnd,
+    ];
+    formControls.forEach(ctrl => {
+      if (ctrl) ctrl.disabled = running;
+    });
+
+    genderCards.forEach(c => {
+      c.style.pointerEvents = running ? "none" : "auto";
+      c.style.opacity = running ? "0.6" : "1";
+    });
+
+    dayPills.forEach(p => {
+      p.style.pointerEvents = running ? "none" : "auto";
+      p.style.opacity = running ? "0.6" : "1";
+    });
+
+    // Eğer tarama durduysa ve Tüm Gün seçiliyse saat kutularını pasif tutmaya devam et
+    if (!running && chkAllDay.checked) {
+      timeInputsContainer.style.opacity = "0.45";
+      timeInputsContainer.style.pointerEvents = "none";
+    }
+
     if (running) {
       statusIndicator.classList.add("running");
       statusText.textContent = "🔍 Taranıyor...";

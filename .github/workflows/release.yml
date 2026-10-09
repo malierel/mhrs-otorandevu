@@ -29,6 +29,7 @@ jobs:
       - name: Windows Portable .exe Paketle
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: --disable-warning=DEP0040
         run: npm run dist
 
       - name: GitHub Release Oluştur ve Exe Dosyasını Yükle
