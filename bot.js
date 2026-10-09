@@ -13,19 +13,6 @@ if (!token) {
 const bot = new TelegramBot(token, { polling: true });
 console.log("MHRS Telegram Botu başlatıldı ve dinleniyor...");
 
-// 7/24 Kesintisiz çalışma için hafif HTTP Health Check Sunucusu (Render.com vb. için)
-const http = require("http");
-const PORT = process.env.PORT || 3000;
-http
-  .createServer((req, res) => {
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("MHRS Telegram Botu 7/24 Aktif ve Calisiyor");
-  })
-  .listen(PORT, () => {
-    console.log(`Health check web sunucusu ${PORT} portunda baslatildi.`);
-  });
-
-
 // Popüler İller (Hızlı erişim için)
 const POPULAR_ILLER = [
   { val: 34, name: "İstanbul" },
