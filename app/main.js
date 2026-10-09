@@ -111,6 +111,9 @@ function createMainWindow() {
     show: true,
   });
 
+  // Electron'un varsayılan "File, Edit, View, Window" üst menü çubuğunu tamamen kaldır
+  Menu.setApplicationMenu(null);
+
   console.log("Pencere oluşturuldu, dosya yükleniyor...");
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 

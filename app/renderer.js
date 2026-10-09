@@ -1,8 +1,6 @@
 // UI Renderer Logic
 document.addEventListener("DOMContentLoaded", async () => {
   // DOM Elements
-  const btnMinimize = document.getElementById("btnMinimize");
-  const btnClose = document.getElementById("btnClose");
   const inputToken = document.getElementById("inputToken");
   const btnSaveToken = document.getElementById("btnSaveToken");
   const tokenStatusText = document.getElementById("tokenStatusText");
@@ -31,10 +29,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   let isRunning = false;
   let currentGender = "F";
   let activeDays = [1, 2, 3, 4, 5, 6, 7];
-
-  // Titlebar controls
-  btnMinimize.addEventListener("click", () => window.api.minimizeWindow());
-  btnClose.addEventListener("click", () => window.api.closeWindow());
 
   // Log Ekleme Yardımcısı
   function appendLog(type, message, timeStr) {
