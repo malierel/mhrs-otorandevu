@@ -22,3 +22,11 @@ tauri-plugin-notification = "2.0"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+# 🚀 Ultra-küçük binary boyutu optimizasyonları
+[profile.release]
+opt-level = "z"     # Boyutu küçültmek için optimize et (Optimize for size)
+lto = true          # Link-Time Optimization (Tüm ölü kodları bağlama anında temizle)
+codegen-units = 1   # Maksimum LTO sıkıştırması için tek çekirdekte birleştir
+panic = "abort"     # Hata yakalama (unwind) tablolarını silip boyuttan tasarruf et
+strip = true        # Debug ve sembol tablolarını (strip symbols) tamamen at
