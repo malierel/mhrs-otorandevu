@@ -1,7 +1,7 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, Notification, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, ipcMain, Notification, nativeImage, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const moment = require("moment-timezone");
+const moment = require("moment");
 const functions = require("../functions");
 
 // Konfigürasyon dosyası yolu (kullanıcı verilerini saklar)
@@ -20,7 +20,16 @@ let lastCheckTime = "-";
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+      const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+      // Token şifreli kaydedilmişse çöz, değilse olduğu gibi kullan
+      if (raw.encryptedToken && safeStorage.isEncryptionAvailable()) {
+        try {
+          raw.token = safeStorage.decryptString(Buffer.from(raw.encryptedToken, "base64"));
+        } catch (_) {
+          raw.token = "";
+        }
+      }
+      return raw;
     }
   } catch (e) {
     console.error("Config okunamadı:", e.message);
@@ -48,6 +57,17 @@ function saveConfig(data) {
   try {
     const current = loadConfig();
     const updated = { ...current, ...data };
+    
+    // Token'ı diskte düz metin bırakmamak için Windows DPAPI ile şifrele
+    if (updated.token && safeStorage.isEncryptionAvailable()) {
+      try {
+        const encrypted = safeStorage.encryptString(updated.token);
+        updated.encryptedToken = encrypted.toString("base64");
+        // Diske yazarken açık token alanını boşalt
+        delete updated.token;
+      } catch (_) {}
+    }
+
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2), "utf-8");
     return { success: true };
   } catch (e) {
@@ -344,9 +364,19 @@ async function executeSearchIteration() {
 
                       booked = true;
                       stopSearchTask();
-                      return;
                     } catch (err) {
-                      sendLog("error", `Randevu onaylanırken hata oluştu: ${err.response?.data?.errors?.[0]?.mesaj || err.message}`);
+                      const apiErr = err.response?.data?.errors?.[0];
+                      const errCode = apiErr?.kodu;
+                      const errMsg = apiErr?.mesaj || err.message;
+                      sendLog("error", `Randevu onaylanırken hata oluştu: ${errMsg}`);
+
+                      // Zaten bu saatte veya klinikte randevu varsa döngüyü boşuna zorlamayıp durdur
+                      if (errCode === "RND6034" || (errMsg && errMsg.includes("daha önce oluşturulmuş randevu"))) {
+                        sendLog("warning", "⚠️ Bu saat diliminde zaten mevcut bir randevunuz olduğu için tarama otomatik durduruldu.");
+                        showNotification("⚠️ Randevu Çakışması", "Bu saat diliminde zaten bir randevunuz bulunuyor.");
+                        stopSearchTask();
+                        return;
+                      }
                     }
                   } else {
                     showNotification("🔔 Uygun Randevu Bulundu!", `Dr. ${hekimAdi} - ${slot.baslangicZamani}`);

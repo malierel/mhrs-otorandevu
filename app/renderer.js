@@ -30,13 +30,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   let currentGender = "F";
   let activeDays = [1, 2, 3, 4, 5, 6, 7];
 
-  // Log Ekleme Yardımcısı
+  // Log Ekleme Yardımcısı (Bellek sızıntısını önlemek için en fazla 300 satır tutar)
+  const MAX_LOG_ENTRIES = 300;
   function appendLog(type, message, timeStr) {
     const time = timeStr || new Date().toLocaleTimeString("tr-TR");
     const div = document.createElement("div");
     div.className = "log-entry";
     div.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${type}">${escapeHtml(message)}</span>`;
     logBody.appendChild(div);
+
+    // 300'den fazla log varsa en eskileri silerek DOM belleğini koru
+    while (logBody.children.length > MAX_LOG_ENTRIES) {
+      logBody.removeChild(logBody.firstChild);
+    }
+
     logBody.scrollTop = logBody.scrollHeight;
   }
 
