@@ -2,6 +2,8 @@ require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const moment = require("moment");
 moment.locale("tr");
+const fs = require("fs");
+const path = require("path");
 const functions = require("./functions.js");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -12,6 +14,8 @@ if (!token) {
 
 const bot = new TelegramBot(token, { polling: true });
 console.log("MHRS Telegram Botu başlatıldı ve dinleniyor...");
+
+const SESSIONS_FILE = path.join(__dirname, "sessions.json");
 
 // Popüler İller (Hızlı erişim için)
 const POPULAR_ILLER = [
@@ -45,6 +49,49 @@ const POPULAR_KLINIK_KEYWORDS = [
 // Kullanıcı oturumlarını saklama
 const sessions = new Map();
 
+// 1. Kalıcılık: Dosyadan Oturumları Yükleme
+function loadSessionsFromFile() {
+  try {
+    if (fs.existsSync(SESSIONS_FILE)) {
+      const data = fs.readFileSync(SESSIONS_FILE, "utf8");
+      const parsed = JSON.parse(data);
+      for (const [chatId, sess] of Object.entries(parsed)) {
+        sess.tokenExp = sess.tokenExp ? new Date(sess.tokenExp) : null;
+        sess.lastChecked = sess.lastChecked ? new Date(sess.lastChecked) : null;
+        sess.timeoutId = null;
+        sessions.set(Number(chatId), sess);
+      }
+      console.log(`[Kalıcılık] ${sessions.size} adet oturum dosyadan yüklendi.`);
+    }
+  } catch (e) {
+    console.error("[Kalıcılık Hatası] Oturumlar yüklenirken hata:", e.message);
+  }
+}
+
+// 1. Kalıcılık: Dosyaya Oturumları Kaydetme
+function saveSessionsToFile() {
+  try {
+    const toSave = {};
+    for (const [chatId, sess] of sessions.entries()) {
+      toSave[chatId] = {
+        chatId: sess.chatId,
+        token: sess.token,
+        tokenExp: sess.tokenExp,
+        userName: sess.userName,
+        state: sess.state,
+        search: sess.search,
+        attempts: sess.attempts,
+        lastChecked: sess.lastChecked,
+        lastStatus: sess.lastStatus,
+        statusMsgId: sess.statusMsgId,
+      };
+    }
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(toSave, null, 2), "utf8");
+  } catch (e) {
+    console.error("[Kalıcılık Hatası] Oturumlar kaydedilemedi:", e.message);
+  }
+}
+
 function getSession(chatId) {
   if (!sessions.has(chatId)) {
     sessions.set(chatId, {
@@ -58,10 +105,11 @@ function getSession(chatId) {
       cachedIlceler: null,
       cachedKlinikler: null,
       search: null,
-      interval: null,
+      timeoutId: null,
       attempts: 0,
       lastChecked: null,
-      statusMsgId: null, // Güncellenecek mesaj ID'si
+      lastStatus: null,
+      statusMsgId: null,
     });
   }
   return sessions.get(chatId);
@@ -98,7 +146,7 @@ function formatRemainingTime(expiryDate) {
   return `${hours} saat ${mins} dakika`;
 }
 
-// Yardımcı: Mesajı güvenle düzenle (aynı içerik hatasını yut)
+// Yardımcı: Mesajı güvenle düzenle
 async function safeEditMessage(chatId, messageId, text, replyMarkup) {
   try {
     return await bot.editMessageText(text, {
@@ -111,7 +159,6 @@ async function safeEditMessage(chatId, messageId, text, replyMarkup) {
     if (err.message && err.message.includes("message is not modified")) {
       return null;
     }
-    // Düzenlenemiyorsa yeni mesaj olarak gönder
     return await bot.sendMessage(chatId, text, {
       parse_mode: "Markdown",
       reply_markup: replyMarkup,
@@ -119,7 +166,27 @@ async function safeEditMessage(chatId, messageId, text, replyMarkup) {
   }
 }
 
-// /start komutu
+// 2. Çakışma Önleme: Kendini Tetikleyen Non-Overlapping setTimeout Döngüsü
+function scheduleNextCheck(chatId, delayMs = 60000) {
+  const session = getSession(chatId);
+  if (!session || session.state !== "SEARCHING") return;
+
+  if (session.timeoutId) clearTimeout(session.timeoutId);
+
+  session.timeoutId = setTimeout(async () => {
+    try {
+      await taramaYap(chatId);
+    } catch (e) {
+      console.error(`[Tarama Hatası] Chat ${chatId}:`, e.message);
+    }
+    // Eğer tarama hala aktifse bir sonraki kontrolü planla:
+    if (session.state === "SEARCHING") {
+      scheduleNextCheck(chatId, 60000);
+    }
+  }, delayMs);
+}
+
+// /start komutu (Deep linking destekli)
 bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
   const chatId = msg.chat.id;
   const session = getSession(chatId);
@@ -131,6 +198,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
   }
 
   session.state = "IDLE";
+  saveSessionsToFile();
 
   const text =
     `👋 *MHRS Otomatik Randevu Botuna Hoş Geldiniz!*\n\n` +
@@ -177,7 +245,6 @@ async function processToken(chatId, session, rawInput) {
   rawInput = (rawInput || "").trim();
   let normalized = "";
 
-  // URL veya doğrudan metinden enabizToken algılama
   const urlMatch = rawInput.match(/enabizToken=([a-f0-9\-]{36})/i);
   const uuidMatch = rawInput.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i);
   const detectedEnabizToken = urlMatch ? urlMatch[1] : (uuidMatch ? uuidMatch[1] : null);
@@ -194,6 +261,7 @@ async function processToken(chatId, session, rawInput) {
       normalized = `Bearer ${jwt}`;
     } catch (e) {
       session.state = "IDLE";
+      saveSessionsToFile();
       bot.sendMessage(
         chatId,
         `❌ *Giriş Başarısız:*\n${e.response?.data?.errors?.[0]?.mesaj || e.message}\n` +
@@ -217,8 +285,8 @@ async function processToken(chatId, session, rawInput) {
     session.token = normalized;
     session.tokenExp = exp;
     session.state = "IDLE";
+    saveSessionsToFile();
 
-    // Önbellekleri sıfırla
     session.cachedIller = null;
     session.cachedIlceler = null;
     session.cachedKlinikler = null;
@@ -246,16 +314,11 @@ async function processToken(chatId, session, rawInput) {
       message: err.message,
       code: err.code,
       status: err.response?.status,
-      statusText: err.response?.statusText,
-      headers: err.response?.headers,
-      data: err.response?.data,
     });
 
-    console.log(`[MHRS Bağlantı Teşhisi Başlatılıyor...]`);
     const diag = await functions.diagnoseMhrsConnection();
-    console.log(`[MHRS Bağlantı Teşhisi Sonucu]:`, JSON.stringify(diag, null, 2));
-
     session.state = "IDLE";
+    saveSessionsToFile();
 
     const isReset =
       (err.code && err.code.includes("ECONNRESET")) ||
@@ -271,7 +334,7 @@ async function processToken(chatId, session, rawInput) {
         `• *DNS IP:* ${diag.dns?.success ? `✅ ${diag.dns.ip}` : `❌ ${diag.dns?.error}`}\n` +
         `• *Port 443 / SSL:* ${diag.tls?.success ? `✅ Başarılı (${diag.tls.protocol})` : `❌ ${diag.tls?.error || diag.tls?.code}`}\n\n` +
         (isReset
-          ? `⚠️ *Kesin Teşhis:* Sağlık Bakanlığı güvenlik duvarı, Render sunucusunun yurt dışı IP adresini doğrudan engellemektedir (TCP Connection Reset).`
+          ? `⚠️ *Tespit:* Sağlık Bakanlığı güvenlik duvarı, bu sunucunun IP adresini doğrudan engellemektedir (TCP Connection Reset).`
           : ""),
       { parse_mode: "Markdown" }
     );
@@ -282,9 +345,7 @@ async function processToken(chatId, session, rawInput) {
 bot.onText(/\/ping|\/test/, async (msg) => {
   const chatId = msg.chat.id;
   bot.sendMessage(chatId, "📡 MHRS sunucu bağlantısı teşhis ediliyor, lütfen bekleyin...");
-  console.log(`[/ping] Ağ teşhisi başlatıldı...`);
   const diag = await functions.diagnoseMhrsConnection();
-  console.log(`[/ping Sonucu]:`, JSON.stringify(diag, null, 2));
 
   const isReset =
     (diag.tls?.error && diag.tls.error.includes("RESET")) ||
@@ -303,13 +364,11 @@ bot.onText(/\/ping|\/test/, async (msg) => {
   );
 });
 
-
 // /randevu komutu
 bot.onText(/\/randevu/, async (msg) => {
   startWizard(msg.chat.id);
 });
 
-// Sihirbazı Başlat
 async function startWizard(chatId, editMessageId = null) {
   const session = getSession(chatId);
 
@@ -322,7 +381,7 @@ async function startWizard(chatId, editMessageId = null) {
     return;
   }
 
-  if (session.interval) {
+  if (session.state === "SEARCHING") {
     bot.sendMessage(
       chatId,
       `⚠️ Zaten devam eden bir randevu aramanız var!\nYeni arama için önce durdurun: /durdur`,
@@ -338,7 +397,7 @@ async function startWizard(chatId, editMessageId = null) {
 }
 
 // -----------------------------------------------------------------------------
-// ADIM 1: İL SEÇİMİ (Popüler Butonlar + Sayfalı Alfabetik Liste)
+// ADIM 1: İL SEÇİMİ
 // -----------------------------------------------------------------------------
 async function renderStepIl(chatId, messageId, pageIndex = 0) {
   const session = getSession(chatId);
@@ -359,10 +418,8 @@ async function renderStepIl(chatId, messageId, pageIndex = 0) {
   const currentPage = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
   const pageIller = iller.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
-
   const keyboard = [];
 
-  // Popüler İller (İlk sayfada göster)
   if (currentPage === 0) {
     keyboard.push([
       { text: "🏢 İstanbul", callback_data: "sel_il_34" },
@@ -381,7 +438,6 @@ async function renderStepIl(chatId, messageId, pageIndex = 0) {
     ]);
   }
 
-  // Sayfalanan İller (2'şerli butonlar)
   for (let i = 0; i < pageIller.length; i += 2) {
     const row = [{ text: pageIller[i].text, callback_data: `sel_il_${pageIller[i].value}` }];
     if (i + 1 < pageIller.length) {
@@ -390,7 +446,6 @@ async function renderStepIl(chatId, messageId, pageIndex = 0) {
     keyboard.push(row);
   }
 
-  // Sayfalama kontrolleri
   const navRow = [];
   if (currentPage > 0) {
     navRow.push({ text: "◀️ Önceki", callback_data: `page_il_${currentPage - 1}` });
@@ -400,13 +455,11 @@ async function renderStepIl(chatId, messageId, pageIndex = 0) {
     navRow.push({ text: "Sonraki ▶️", callback_data: `page_il_${currentPage + 1}` });
   }
   keyboard.push(navRow);
-
-  // İptal Butonu
   keyboard.push([{ text: "❌ İptal Et", callback_data: "wizard_cancel" }]);
 
   const text =
     `📍 *1/5 Adım: Randevu İstediğiniz İli Seçin*\n\n` +
-    `Popüler illerden birine dokunun veya aşağıdaki listeden sayfa değiştirerek ilinizi seçin:`;
+    `Popüler illerden birine dokunun veya sayfa değiştirerek ilinizi seçin:`;
 
   if (messageId) {
     await safeEditMessage(chatId, messageId, text, { inline_keyboard: keyboard });
@@ -420,7 +473,7 @@ async function renderStepIl(chatId, messageId, pageIndex = 0) {
 }
 
 // -----------------------------------------------------------------------------
-// ADIM 2: İLÇE SEÇİMİ (Tüm İl + Dinamik İlçe Butonları)
+// ADIM 2: İLÇE SEÇİMİ
 // -----------------------------------------------------------------------------
 async function renderStepIlce(chatId, messageId, pageIndex = 0) {
   const session = getSession(chatId);
@@ -443,13 +496,10 @@ async function renderStepIlce(chatId, messageId, pageIndex = 0) {
   const currentPage = Math.max(0, Math.min(pageIndex, totalPages - 1));
 
   const pageIlceler = ilceler.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
-
   const keyboard = [];
 
-  // En üstte "Tüm İl (Fark Etmez)" seçeneği
   keyboard.push([{ text: `🌐 ${il.text} Genelinde Ara (Fark Etmez)`, callback_data: "sel_ilce_f" }]);
 
-  // İlçeler (2'şerli sütun)
   for (let i = 0; i < pageIlceler.length; i += 2) {
     const row = [{ text: pageIlceler[i].text, callback_data: `sel_ilce_${pageIlceler[i].value}` }];
     if (i + 1 < pageIlceler.length) {
@@ -458,7 +508,6 @@ async function renderStepIlce(chatId, messageId, pageIndex = 0) {
     keyboard.push(row);
   }
 
-  // Sayfalama (gerekirse)
   if (totalPages > 1) {
     const navRow = [];
     if (currentPage > 0) {
@@ -471,7 +520,6 @@ async function renderStepIlce(chatId, messageId, pageIndex = 0) {
     keyboard.push(navRow);
   }
 
-  // Geri Butonu
   keyboard.push([{ text: "◀️ İl Değiştir", callback_data: "back_to_il" }]);
 
   const text =
@@ -483,7 +531,7 @@ async function renderStepIlce(chatId, messageId, pageIndex = 0) {
 }
 
 // -----------------------------------------------------------------------------
-// ADIM 3: KLİNİK SEÇİMİ (Popüler Klinikler + Sayfalı Liste)
+// ADIM 3: KLİNİK SEÇİMİ
 // -----------------------------------------------------------------------------
 async function renderStepKlinik(chatId, messageId, pageIndex = 0) {
   const session = getSession(chatId);
@@ -509,7 +557,6 @@ async function renderStepKlinik(chatId, messageId, pageIndex = 0) {
 
   const keyboard = [];
 
-  // İlk sayfada popüler klinikler
   if (currentPage === 0) {
     const popRows = [];
     let currentRow = [];
@@ -529,7 +576,6 @@ async function renderStepKlinik(chatId, messageId, pageIndex = 0) {
     keyboard.push(...popRows);
   }
 
-  // Sayfalanan Genel Klinik Listesi
   const pageKlinikler = klinikler.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   for (let i = 0; i < pageKlinikler.length; i += 2) {
     const row = [{ text: pageKlinikler[i].text, callback_data: `sel_kl_${pageKlinikler[i].value}` }];
@@ -539,7 +585,6 @@ async function renderStepKlinik(chatId, messageId, pageIndex = 0) {
     keyboard.push(row);
   }
 
-  // Sayfalama kontrolleri
   if (totalPages > 1) {
     const navRow = [];
     if (currentPage > 0) {
@@ -552,13 +597,12 @@ async function renderStepKlinik(chatId, messageId, pageIndex = 0) {
     keyboard.push(navRow);
   }
 
-  // Arama ve Geri butonu
   keyboard.push([
     { text: "🔍 İsimle Ara", callback_data: "search_kl_prompt" },
     { text: "◀️ İlçe Değiştir", callback_data: "back_to_ilce" },
   ]);
 
-  const ilceAdi = session.temp.ilce === "f" ? "Fark Etmez" : session.temp.ilce.text;
+  const ilceAdi = session.temp.ilce === "f" ? "Fark Etmez" : (session.temp.ilce?.text || session.temp.ilce);
   const text =
     `🩺 *3/5 Adım: Poliklinik (Klinik) Seçimi*\n\n` +
     `Konum: *${il.text} / ${ilceAdi}*\n\n` +
@@ -594,8 +638,6 @@ async function renderStepCinsiyet(chatId, messageId) {
 // ADIM 5: TARİH ARALIĞI (GÜN)
 // -----------------------------------------------------------------------------
 async function renderStepGun(chatId, messageId) {
-  const session = getSession(chatId);
-
   const keyboard = [
     [
       { text: "⚡ Önümüzdeki 3 Gün", callback_data: "sel_gun_3" },
@@ -622,7 +664,7 @@ async function renderSummary(chatId, messageId) {
   const session = getSession(chatId);
   const s = session.temp;
 
-  const ilceAdi = s.ilce === "f" ? "Fark Etmez (Tüm İl)" : s.ilce.text;
+  const ilceAdi = s.ilce === "f" ? "Fark Etmez (Tüm İl)" : (s.ilce?.text || s.ilce);
   const cinsiyetStr = s.cinsiyet === "E" ? "Erkek" : s.cinsiyet === "K" ? "Kadın" : "Fark Etmez";
 
   const keyboard = [
@@ -654,7 +696,7 @@ async function renderDashboard(chatId, messageId) {
   if (!session.search || session.state !== "SEARCHING") return;
 
   const s = session.search;
-  const ilceAdi = s.ilce === "f" ? "Tüm İl" : s.ilce.text;
+  const ilceAdi = s.ilce === "f" ? "Tüm İl" : (s.ilce?.text || s.ilce);
   const sonKontrolStr = session.lastChecked
     ? moment(session.lastChecked).format("HH:mm:ss")
     : "İlk kontrol yapılıyor...";
@@ -678,7 +720,6 @@ async function renderDashboard(chatId, messageId) {
     `⏳ *Token Kalan Süre:* ${formatRemainingTime(session.tokenExp)}\n` +
     `━━━━━━━━━━━━━━━━━━━\n` +
     `Durum: ${durumMesaji}`;
-
 
   if (messageId) {
     await safeEditMessage(chatId, messageId, text, { inline_keyboard: keyboard });
@@ -704,14 +745,13 @@ bot.on("callback_query", async (query) => {
 
   if (data === "noop") return;
 
-  // Komut Butonları
   if (data === "cmd_randevu") {
     return startWizard(chatId, messageId);
   }
   if (data === "cmd_durum") {
     return bot.sendMessage(
       chatId,
-      session.interval ? "🔄 Aktif tarama var." : "⏸ Sistem boşta.",
+      session.state === "SEARCHING" ? "🔄 Aktif tarama var." : "⏸ Sistem boşta.",
       { parse_mode: "Markdown" }
     );
   }
@@ -722,6 +762,7 @@ bot.on("callback_query", async (query) => {
   if (data === "wizard_cancel") {
     session.state = "IDLE";
     session.temp = {};
+    saveSessionsToFile();
     return safeEditMessage(chatId, messageId, "🚫 Randevu seçimi iptal edildi.", {
       inline_keyboard: [[{ text: "🩺 Yeniden Başlat", callback_data: "cmd_randevu" }]],
     });
@@ -829,28 +870,24 @@ bot.on("callback_query", async (query) => {
     session.attempts = 0;
     session.lastChecked = null;
     session.statusMsgId = messageId;
+    session.lastStatus = "🔍 İlk kontrol yapılıyor...";
+    saveSessionsToFile();
 
     await renderDashboard(chatId, messageId);
 
-    // İlk kontrolü anında yap
-    taramaYap(chatId);
-
-    // 1 dakikalık döngüyü kur
-    if (session.interval) clearInterval(session.interval);
-    session.interval = setInterval(() => {
-      taramaYap(chatId);
-    }, 60000);
-
+    // 2. Çakışmasız non-overlapping zamanlama başlat
+    scheduleNextCheck(chatId, 500);
     return;
   }
 
   // TARAMAYI DURDURMA
   if (data === "stop_search_now") {
-    if (session.interval) {
-      clearInterval(session.interval);
-      session.interval = null;
+    if (session.timeoutId) {
+      clearTimeout(session.timeoutId);
+      session.timeoutId = null;
     }
     session.state = "IDLE";
+    saveSessionsToFile();
 
     const text =
       `🛑 *Tarama Durduruldu!*\n\n` +
@@ -864,16 +901,14 @@ bot.on("callback_query", async (query) => {
     return safeEditMessage(chatId, messageId, text, replyMarkup);
   }
 
-  // ZORLA KONTROL ET (Manuel Tetik)
+  // ZORLA KONTROL ET
   if (data === "force_check_now") {
-    taramaYap(chatId);
+    scheduleNextCheck(chatId, 100);
     return;
   }
 });
 
-// -----------------------------------------------------------------------------
-// METİN GİRİŞLERİNİ DİNLEME (Arama & Token)
-// -----------------------------------------------------------------------------
+// METİN GİRİŞLERİNİ DİNLEME
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text?.trim();
@@ -882,13 +917,11 @@ bot.on("message", async (msg) => {
 
   const session = getSession(chatId);
 
-  // 1. Token Girişi
   if (session.state === "AWAITING_TOKEN") {
     await processToken(chatId, session, text);
     return;
   }
 
-  // 2. Klinik İsimle Arama
   if (session.state === "AWAITING_SEARCH_TEXT" && session.cachedKlinikler) {
     const sade = functions.yaziSadele(text);
     const matches = session.cachedKlinikler.filter((k) =>
@@ -911,7 +944,6 @@ bot.on("message", async (msg) => {
       return renderStepCinsiyet(chatId, null);
     }
 
-    // Birden fazla eşleşme varsa buton olarak sun
     const buttons = matches.slice(0, 10).map((m) => [
       { text: m.text, callback_data: `sel_kl_${m.value}` },
     ]);
@@ -935,7 +967,7 @@ bot.onText(/\/durum/, (msg) => {
   const chatId = msg.chat.id;
   const session = getSession(chatId);
 
-  if (session.interval && session.search) {
+  if (session.state === "SEARCHING" && session.search) {
     renderDashboard(chatId, null);
   } else {
     const tokenStr = session.token
@@ -961,27 +993,27 @@ bot.onText(/\/durdur/, (msg) => {
   const chatId = msg.chat.id;
   const session = getSession(chatId);
 
-  if (session.interval) {
-    clearInterval(session.interval);
-    session.interval = null;
-    session.state = "IDLE";
-    bot.sendMessage(
-      chatId,
-      `🛑 *Tarama Durduruldu!*\nToplam *${session.attempts}* kontrol yapıldı.`,
-      {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [[{ text: "🩺 Yeniden Başlat", callback_data: "cmd_randevu" }]],
-        },
-      }
-    );
-  } else {
-    bot.sendMessage(chatId, `ℹ️ Zaten çalışan aktif bir randevu arama işlemi yok.`);
+  if (session.timeoutId) {
+    clearTimeout(session.timeoutId);
+    session.timeoutId = null;
   }
+  session.state = "IDLE";
+  saveSessionsToFile();
+
+  bot.sendMessage(
+    chatId,
+    `🛑 *Tarama Durduruldu!*\nToplam *${session.attempts}* kontrol yapıldı.`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [[{ text: "🩺 Yeniden Başlat", callback_data: "cmd_randevu" }]],
+      },
+    }
+  );
 });
 
 // -----------------------------------------------------------------------------
-// ARKA PLAN TARAMA MOTORU (Polling & Auto-Booking)
+// ARKA PLAN TARAMA MOTORU
 // -----------------------------------------------------------------------------
 async function taramaYap(chatId) {
   const session = getSession(chatId);
@@ -993,11 +1025,6 @@ async function taramaYap(chatId) {
 
   console.log(`[Chat ${chatId}] Randevu aranıyor (${session.attempts}. deneme) - ${s.klinik.text}`);
 
-  // Kontrol panelini güncelle
-  if (session.statusMsgId) {
-    renderDashboard(chatId, session.statusMsgId).catch(() => {});
-  }
-
   try {
     // 1. Zaten aktif randevu var mı?
     const randevular = await functions.kullaniciRandevulari(session.token);
@@ -1006,9 +1033,10 @@ async function taramaYap(chatId) {
     );
 
     if (mevcutRandevu) {
-      clearInterval(session.interval);
-      session.interval = null;
+      if (session.timeoutId) clearTimeout(session.timeoutId);
+      session.timeoutId = null;
       session.state = "IDLE";
+      saveSessionsToFile();
 
       bot.sendMessage(
         chatId,
@@ -1021,7 +1049,7 @@ async function taramaYap(chatId) {
     // 2. Randevu ara
     const baslangicTarihi = moment().format("YYYY-MM-DD HH:mm:ss");
     const bitisTarihi = moment().add(Number(s.gun), "days").format("YYYY-MM-DD HH:mm:ss");
-    const ilceId = s.ilce === "f" ? -1 : s.ilce.value;
+    const ilceId = s.ilce === "f" || !s.ilce ? -1 : s.ilce.value;
 
     const randevuVerisi = await functions.randevuAra(
       session.token,
@@ -1035,10 +1063,11 @@ async function taramaYap(chatId) {
 
     if (!randevuVerisi?.hastane || randevuVerisi.hastane.length === 0) {
       session.lastStatus = "❌ Uygun randevu bulunamadı, bekleniyor...";
+      saveSessionsToFile();
       if (session.statusMsgId) {
         renderDashboard(chatId, session.statusMsgId).catch(() => {});
       }
-      return; // Randevu yok, devam
+      return;
     }
 
     // 3. En yakın tarihli hastaneyi seç
@@ -1060,15 +1089,17 @@ async function taramaYap(chatId) {
 
     if (kullanilabilirHekimler.length > 0) {
       for (const hekim of kullanilabilirHekimler) {
-        const saatler =
-          hekim.hekimSlotList[0]?.muayeneYeriSlotList[0]?.saatSlotList?.filter(
-            (saat) => saat.bos === true
-          ) || [];
-
         const slotList = [];
-        for (const saat of saatler) {
-          for (const slotKey in saat.slotList) {
-            slotList.push(saat.slotList[slotKey]);
+        // Tüm muayene yerlerindeki tüm slotları topla
+        for (const hekimSlot of hekim.hekimSlotList || []) {
+          for (const yerSlot of hekimSlot.muayeneYeriSlotList || []) {
+            for (const saatSlot of yerSlot.saatSlotList || []) {
+              if (saatSlot.bos) {
+                for (const slotKey in saatSlot.slotList) {
+                  slotList.push(saatSlot.slotList[slotKey]);
+                }
+              }
+            }
           }
         }
 
@@ -1086,11 +1117,11 @@ async function taramaYap(chatId) {
             alinacakSlot.bitisZamani
           );
 
-          // Başarılı!
-          clearInterval(session.interval);
-          session.interval = null;
+          if (session.timeoutId) clearTimeout(session.timeoutId);
+          session.timeoutId = null;
           session.state = "IDLE";
           session.lastStatus = "🎉 Randevu Başarıyla Alındı!";
+          saveSessionsToFile();
 
           const hekimAdi = `${resp.hekim?.ad || ""} ${resp.hekim?.soyad || ""}`.trim();
           const kurumAdi = resp.kurum?.kurumAdi || enYakinHastane.kurum.kurumAdi;
@@ -1117,16 +1148,18 @@ async function taramaYap(chatId) {
     }
 
     session.lastStatus = "❌ Hekim bulundu fakat uygun slot yok, bekleniyor...";
+    saveSessionsToFile();
     if (session.statusMsgId) {
       renderDashboard(chatId, session.statusMsgId).catch(() => {});
     }
   } catch (err) {
     if (err.response?.status === 401) {
-      clearInterval(session.interval);
-      session.interval = null;
+      if (session.timeoutId) clearTimeout(session.timeoutId);
+      session.timeoutId = null;
       session.state = "IDLE";
       session.token = null;
       session.lastStatus = "⚠️ Oturum Süresi Doldu";
+      saveSessionsToFile();
 
       bot.sendMessage(
         chatId,
@@ -1140,13 +1173,13 @@ async function taramaYap(chatId) {
 
     if (err.response?.data?.errors?.[0]?.kodu === "RND4010") {
       session.lastStatus = "❌ Uygun randevu bulunamadı, bekleniyor...";
+      saveSessionsToFile();
       if (session.statusMsgId) {
         renderDashboard(chatId, session.statusMsgId).catch(() => {});
       }
       return;
     }
 
-    // Beklenmeyen API Hatası
     const errDetail =
       err.response?.data?.errors?.[0]?.mesaj ||
       err.response?.data?.message ||
@@ -1155,6 +1188,7 @@ async function taramaYap(chatId) {
     const errCode = err.response?.data?.errors?.[0]?.kodu || err.response?.status || "HATA";
 
     session.lastStatus = `⚠️ Hata [${errCode}]: ${errDetail}`;
+    saveSessionsToFile();
     if (session.statusMsgId) {
       renderDashboard(chatId, session.statusMsgId).catch(() => {});
     }
@@ -1172,3 +1206,20 @@ async function taramaYap(chatId) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// BAŞLANGIÇ: KALICI OTURUMLARI YÜKLE VE AKTİF ARAMALARI OTOMATİK DEVAM ETTİR
+// -----------------------------------------------------------------------------
+loadSessionsFromFile();
+
+for (const [chatId, sess] of sessions.entries()) {
+  if (sess.state === "SEARCHING" && sess.token && sess.search) {
+    console.log(`[Otomatik Devam] Chat ${chatId} için aktif tarama kaldığı yerden devam ettiriliyor...`);
+    scheduleNextCheck(chatId, 3000);
+    bot.sendMessage(
+      chatId,
+      `🔄 *Bot Yeniden Başlatıldı!*\n\n` +
+        `*${sess.search.il.text} / ${sess.search.klinik.text}* için randevu aramanız kaldığı yerden (deneme #${sess.attempts}) otomatik olarak devam ettiriliyor.`,
+      { parse_mode: "Markdown" }
+    ).catch(() => {});
+  }
+}

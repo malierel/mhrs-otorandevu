@@ -4,4 +4,6 @@
 *.har
 test-*.js
 inspect-*.js
+sessions.json
+
 

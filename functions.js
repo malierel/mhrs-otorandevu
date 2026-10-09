@@ -88,118 +88,50 @@ module.exports = {
     return yeniStr.toLowerCase().replaceAll(" ", "");
   },
 
-  girisYap: (tckimlik, sifre) => {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
-        kullaniciAdi: tckimlik,
-        parola: sifre,
-        islemKanali: "VATANDAS_WEB",
-        girisTipi: "PAROLA",
-      });
-
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      };
-
-      client
-        .post("https://prd.mhrs.gov.tr/api/vatandas/login", data, config)
-        .then((resp) => resolve(resp.data))
-        .catch((error) => reject(error));
+  enabizTokenIleGiris: async (enabizToken) => {
+    const resp = await client.post("https://prd.mhrs.gov.tr/api/vatandas/enabiz/login", {
+      enabizToken,
+      islemKanali: "VATANDAS_ENABIZ",
     });
+    return resp.data;
   },
 
-  enabizTokenIleGiris: (enabizToken) => {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
-        enabizToken: enabizToken,
-        islemKanali: "VATANDAS_ENABIZ",
-      });
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      };
-      client
-        .post("https://prd.mhrs.gov.tr/api/vatandas/enabiz/login", data, config)
-        .then((resp) => resolve(resp.data))
-        .catch((error) => reject(error));
+  kullaniciRandevulari: async (token) => {
+    const resp = await client.get("https://prd.mhrs.gov.tr/api/kurum/randevu/randevu-gecmisi", {
+      headers: { Authorization: token },
     });
-  },
-
-  kullaniciRandevulari: (token) => {
-    return new Promise((resolve, reject) => {
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
-      };
-
-      client
-        .get("https://prd.mhrs.gov.tr/api/kurum/randevu/randevu-gecmisi", config)
-        .then((resp) => resolve(resp.data.data))
-        .catch((error) => reject(error));
-    });
+    return resp.data.data;
   },
 
   illeriAl: async (token) => {
-    return new Promise((resolve, reject) => {
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
-      };
-
-      client
-        .get("https://prd.mhrs.gov.tr/api/yonetim/genel/il/selectinput-tree", config)
-        .then((resp) => resolve(resp.data))
-        .catch((error) => reject(error));
+    const resp = await client.get("https://prd.mhrs.gov.tr/api/yonetim/genel/il/selectinput-tree", {
+      headers: { Authorization: token },
     });
+    return resp.data;
   },
 
   ilinIlceleri: async (token, ilPlaka) => {
-    return new Promise((resolve, reject) => {
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
-      };
-
-      client
-        .get(`https://prd.mhrs.gov.tr/api/yonetim/genel/ilce/selectinput/${ilPlaka}`, config)
-        .then((resp) => resolve(resp.data))
-        .catch((error) => reject(error));
-    });
+    const resp = await client.get(
+      `https://prd.mhrs.gov.tr/api/yonetim/genel/ilce/selectinput/${ilPlaka}`,
+      { headers: { Authorization: token } }
+    );
+    return resp.data;
   },
 
   klinikleriAl: async (token, ilPlaka, ilceId) => {
-    return new Promise((resolve, reject) => {
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
-      };
-
-      client
-        .get(
-          `https://prd.mhrs.gov.tr/api/kurum/kurum/kurum-klinik/il/${ilPlaka}/ilce/${ilceId}/kurum/-1/aksiyon/200/select-input`,
-          config
-        )
-        .then((resp) => resolve(resp.data.data))
-        .catch((error) => reject(error));
-    });
+    const resp = await client.get(
+      `https://prd.mhrs.gov.tr/api/kurum/kurum/kurum-klinik/il/${ilPlaka}/ilce/${ilceId}/kurum/-1/aksiyon/200/select-input`,
+      { headers: { Authorization: token } }
+    );
+    return resp.data.data;
   },
 
-  randevuAra: (token, plaka, ilceId, cinsiyet, klinikid, baslangic, bitis) => {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
+  randevuAra: async (token, plaka, ilceId, cinsiyet, klinikid, baslangic, bitis) => {
+    const resp = await client.post(
+      "https://prd.mhrs.gov.tr/api/kurum-rss/randevu/slot-sorgulama/arama",
+      {
         aksiyonId: "200",
-        cinsiyet: cinsiyet,
+        cinsiyet,
         mhrsHekimId: -1,
         mhrsIlId: plaka,
         mhrsIlceId: ilceId,
@@ -211,73 +143,45 @@ module.exports = {
         randevuZamaniList: [],
         baslangicZamani: baslangic,
         bitisZamani: bitis,
-      });
-
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
-      };
-
-      client
-        .post("https://prd.mhrs.gov.tr/api/kurum-rss/randevu/slot-sorgulama/arama", data, config)
-        .then((resp) => resolve(resp.data.data))
-        .catch((error) => reject(error));
-    });
+      },
+      { headers: { Authorization: token } }
+    );
+    return resp.data.data;
   },
 
-  hekimAra: (token, plaka, cinsiyet, klinikid, kurumid, hekimid) => {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
+  hekimAra: async (token, plaka, cinsiyet, klinikid, kurumid, hekimid) => {
+    const resp = await client.post(
+      "https://prd.mhrs.gov.tr/api/kurum-rss/randevu/slot-sorgulama/slot",
+      {
         aksiyonId: 200,
         mhrsHekimId: hekimid,
         mhrsIlId: plaka,
         mhrsKlinikId: klinikid,
         mhrsKurumId: kurumid,
         muayeneYeriId: -1,
-        cinsiyet: cinsiyet,
+        cinsiyet,
         tumRandevular: false,
         ekRandevu: true,
         randevuZamaniList: [],
-      });
-
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
-      };
-
-      client
-        .post("https://prd.mhrs.gov.tr/api/kurum-rss/randevu/slot-sorgulama/slot", data, config)
-        .then((resp) => resolve(resp.data.data))
-        .catch((error) => reject(error));
-    });
+      },
+      { headers: { Authorization: token } }
+    );
+    return resp.data.data;
   },
 
-  randevuAl: (token, fkslotid, fkcetvelid, baslangiczamani, bitiszamani) => {
-    return new Promise((resolve, reject) => {
-      const data = JSON.stringify({
+  randevuAl: async (token, fkslotid, fkcetvelid, baslangiczamani, bitiszamani) => {
+    const resp = await client.post(
+      "https://prd.mhrs.gov.tr/api/kurum/randevu/randevu-ekle",
+      {
         fkSlotId: fkslotid,
         fkCetvelId: fkcetvelid,
         yenidogan: false,
         baslangicZamani: baslangiczamani,
         bitisZamani: bitiszamani,
         randevuNotu: "",
-      });
-
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token,
-        },
-      };
-
-      client
-        .post("https://prd.mhrs.gov.tr/api/kurum/randevu/randevu-ekle", data, config)
-        .then((resp) => resolve(resp.data.data))
-        .catch((error) => reject(error));
-    });
+      },
+      { headers: { Authorization: token } }
+    );
+    return resp.data.data;
   },
 };
