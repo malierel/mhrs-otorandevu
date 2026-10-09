@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MHRS Otomatik Randevu</title>
+  <style>
+    :root {
+      --mhrs-red: #c62828;
+      --mhrs-dark-red: #8e0000;
+      --mhrs-light-red: #ef5350;
+      --mhrs-bg: #f5f7fb;
+      --card-bg: #ffffff;
+      --text-main: #2c3e50;
+      --text-muted: #7f8c8d;
+      --border-color: #e2e8f0;
+      --success: #27ae60;
+      --warning: #f39c12;
+      --danger: #e74c3c;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--mhrs-bg);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Özel Başlık Çubuğu (Custom Titlebar) */
+    .titlebar {
+      height: 42px;
+      background: linear-gradient(135deg, var(--mhrs-red) 0%, var(--mhrs-dark-red) 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      -webkit-app-region: drag;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      z-index: 1000;
+    }
+
+    .titlebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .brand-icon {
+      width: 24px;
+      height: 24px;
+      background: white;
+      color: var(--mhrs-red);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    .titlebar-controls {
+      display: flex;
+      -webkit-app-region: no-drag;
+    }
+
+    .titlebar-btn {
+      width: 38px;
+      height: 42px;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .titlebar-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .titlebar-btn.close:hover {
+      background: #e74c3c;
+    }
+
+    /* Ana Düzen */
+    .main-container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      gap: 16px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    /* Sol Taraf: MHRS Randevu Arama Formu */
+    .form-pane {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 18px;
+      gap: 14px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--mhrs-red);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 2px solid #fee2e2;
+      padding-bottom: 6px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #4a5568;
+    }
+
+    input, select {
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border-color);
+      font-size: 13px;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.2s;
+      background: #fafafa;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--mhrs-red);
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.12);
+    }
+
+    /* Token Kartı */
+    .token-box {
+      background: #fdf2f2;
+      border: 1px dashed var(--mhrs-light-red);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .token-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-small {
+      padding: 8px 12px;
+      background: var(--mhrs-red);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    .btn-small:hover {
+      background: var(--mhrs-dark-red);
+    }
+
+    .token-status {
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 600;
+    }
+
+    .badge-ok { color: var(--success); }
+    .badge-bad { color: var(--danger); }
+
+    /* Cinsiyet & Günler Seçimi */
+    .gender-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .radio-card {
+      padding: 8px;
+      border: 1.5px solid var(--border-color);
+      border-radius: 6px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #fff;
+    }
+
+    .radio-card.active {
+      border-color: var(--mhrs-red);
+      background: #fef2f2;
+      color: var(--mhrs-red);
+    }
+
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+
+    .day-pill {
+      padding: 7px 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      cursor: pointer;
+      background: #f8fafc;
+      transition: all 0.15s;
+    }
+
+    .day-pill.active {
+      background: var(--mhrs-red);
+      color: white;
+      border-color: var(--mhrs-red);
+    }
+
+    /* Tarih Grid */
+    .dates-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    /* Sağ Taraf: Canlı Durum ve Log Paneli */
+    .monitor-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: hidden;
+    }
+
+    /* Durum Kartı */
+    .status-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 16px 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .status-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .status-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .status-main {
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+
+    .status-indicator.running {
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; transform: scale(1.15); }
+      100% { opacity: 0.6; }
+    }
+
+    .metrics-group {
+      display: flex;
+      gap: 20px;
+    }
+
+    .metric-box {
+      text-align: right;
+    }
+
+    .metric-val {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    .metric-lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Başlat / Durdur Butonu */
+    .btn-action {
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn-start {
+      background: #16a34a;
+      color: white;
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+    }
+
+    .btn-start:hover {
+      background: #15803d;
+      transform: translateY(-1px);
+    }
+
+    .btn-stop {
+      background: #dc2626;
+      color: white;
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    }
+
+    .btn-stop:hover {
+      background: #b91c1c;
+      transform: translateY(-1px);
+    }
+
+    /* Log Konsolu (Terminal) */
+    .log-container {
+      flex: 1;
+      background: #0f172a;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid #1e293b;
+    }
+
+    .log-header {
+      background: #1e293b;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .log-tools {
+      display: flex;
+      gap: 10px;
+    }
+
+    .log-link {
+      color: #38bdf8;
+      cursor: pointer;
+      font-size: 11px;
+      text-decoration: underline;
+    }
+
+    .log-body {
+      flex: 1;
+      padding: 14px;
+      overflow-y: auto;
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #e2e8f0;
+    }
+
+    .log-entry {
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+
+    .log-time {
+      color: #64748b;
+      margin-right: 6px;
+    }
+
+    .log-info { color: #38bdf8; }
+    .log-success { color: #4ade80; font-weight: bold; }
+    .log-warning { color: #facc15; }
+    .log-error { color: #f87171; font-weight: bold; }
+
+    /* Randevu Bildirim Bannerı */
+    .booked-banner {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      color: white;
+      padding: 14px 18px;
+      border-radius: 10px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 6px 16px rgba(5, 150, 105, 0.3);
+      animation: slideDown 0.4s ease;
+    }
+
+    @keyframes slideDown {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Özel MHRS Başlık Çubuğu -->
+  <div class="titlebar">
+    <div class="titlebar-brand">
+      <div class="brand-icon">+</div>
+      <span>T.C. SAĞLIK BAKANLIĞI • MHRS Otomatik Randevu Asistanı</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btnMinimize" title="Simge Durumuna Küçült">−</button>
+      <button class="titlebar-btn close" id="btnClose" title="Gizli Simgelere (Tray) Küçült">✕</button>
+    </div>
+  </div>
+
+  <!-- Ana İçerik -->
+  <div class="main-container">
+    
+    <!-- SOL: Form & Filtreler -->
+    <div class="form-pane">
+      
+      <!-- Token Kartı -->
+      <div class="token-box">
+        <label>🔑 MHRS Bearer Token</label>
+        <div class="token-row">
+          <input type="password" id="inputToken" placeholder="Bearer eyJhbGciOi..." style="flex:1;">
+          <button class="btn-small" id="btnSaveToken">Doğrula</button>
+        </div>
+        <div class="token-status" id="tokenStatusText">
+          <span>Durum: Henüz doğrulanmadı</span>
+        </div>
+      </div>
+
+      <div class="section-title">🏥 Randevu Kriterleri</div>
+
+      <!-- İl Seçimi -->
+      <div class="form-group">
+        <label>İl</label>
+        <select id="selectCity">
+          <option value="">İller yükleniyor...</option>
+        </select>
+      </div>
+
+      <!-- İlçe Seçimi -->
+      <div class="form-group">
+        <label>İlçe</label>
+        <select id="selectDistrict">
+          <option value="-1">Fark Etmez (Tüm İlçeler)</option>
+        </select>
+      </div>
+
+      <!-- Klinik Seçimi -->
+      <div class="form-group">
+        <label>Klinik (Poliklinik)</label>
+        <select id="selectClinic">
+          <option value="">Önce il/ilçe seçiniz...</option>
+        </select>
+      </div>
+
+      <!-- Hekim Cinsiyeti -->
+      <div class="form-group">
+        <label>Hekim Cinsiyeti</label>
+        <div class="gender-group">
+          <div class="radio-card active" data-gender="F">Fark Etmez</div>
+          <div class="radio-card" data-gender="K">Kadın</div>
+          <div class="radio-card" data-gender="E">Erkek</div>
+        </div>
+      </div>
+
+      <!-- Tarih Aralığı -->
+      <div class="form-group">
+        <label>Tarih Aralığı</label>
+        <div class="dates-grid">
+          <input type="date" id="dateStart">
+          <input type="date" id="dateEnd">
+        </div>
+      </div>
+
+      <!-- Tercih Edilen Günler -->
+      <div class="form-group">
+        <label>Kabul Edilen Günler</label>
+        <div class="days-grid">
+          <div class="day-pill active" data-day="1">Pzt</div>
+          <div class="day-pill active" data-day="2">Sal</div>
+          <div class="day-pill active" data-day="3">Çar</div>
+          <div class="day-pill active" data-day="4">Per</div>
+          <div class="day-pill active" data-day="5">Cum</div>
+          <div class="day-pill active" data-day="6">Cmt</div>
+          <div class="day-pill active" data-day="7">Paz</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SAĞ: İzleme, Durum ve Log Paneli -->
+    <div class="monitor-pane">
+      
+      <!-- Randevu Başarı Bannerı -->
+      <div class="booked-banner" id="bookedBanner">
+        <div>
+          <div style="font-size: 16px; font-weight: 800;">🎉 Randevunuz Başarıyla Alındı!</div>
+          <div id="bookedDetails" style="font-size: 13px; opacity: 0.95; margin-top: 2px;"></div>
+        </div>
+        <button class="btn-small" style="background: white; color: #047857;" onclick="document.getElementById('bookedBanner').style.display='none'">Kapat</button>
+      </div>
+
+      <!-- Durum ve Kontrol Kartı -->
+      <div class="status-card">
+        <div class="status-info">
+          <div class="status-title">Tarama Durumu</div>
+          <div class="status-main">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Beklemede</span>
+          </div>
+        </div>
+
+        <div class="metrics-group">
+          <div class="metric-box">
+            <div class="metric-val" id="metricAttempts">0</div>
+            <div class="metric-lbl">Deneme</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-val" id="metricLastCheck">-</div>
+            <div class="metric-lbl">Son Kontrol</div>
+          </div>
+        </div>
+
+        <button class="btn-action btn-start" id="btnToggleSearch">
+          <span>▶</span>
+          <span id="btnActionText">Taramayı Başlat</span>
+        </button>
+      </div>
+
+      <!-- Canlı Log Ekranı -->
+      <div class="log-container">
+        <div class="log-header">
+          <span>Canlı İşlem Günlüğü (Terminal)</span>
+          <div class="log-tools">
+            <span class="log-link" id="btnClearLog">Temizle</span>
+          </div>
+        </div>
+        <div class="log-body" id="logBody">
+          <div class="log-entry">
+            <span class="log-time">[Sistem]</span>
+            <span class="log-info">MHRS Otomatik Randevu Asistanı hazır. Lütfen token ve filtrelerinizi ayarlayın.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
