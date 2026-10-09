@@ -13,6 +13,19 @@ if (!token) {
 const bot = new TelegramBot(token, { polling: true });
 console.log("MHRS Telegram Botu başlatıldı ve dinleniyor...");
 
+// 7/24 Kesintisiz çalışma için hafif HTTP Health Check Sunucusu (Render.com vb. için)
+const http = require("http");
+const PORT = process.env.PORT || 3000;
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("MHRS Telegram Botu 7/24 Aktif ve Calisiyor");
+  })
+  .listen(PORT, () => {
+    console.log(`Health check web sunucusu ${PORT} portunda baslatildi.`);
+  });
+
+
 // Popüler İller (Hızlı erişim için)
 const POPULAR_ILLER = [
   { val: 34, name: "İstanbul" },
@@ -612,6 +625,8 @@ async function renderDashboard(chatId, messageId) {
     ],
   ];
 
+  const durumMesaji = session.lastStatus || "🔍 Boş slot aranıyor... (Her 1 dk'da bir kontrol ediliyor)";
+
   const text =
     `🔄 *MHRS Randevu Taraması Aktif*\n` +
     `━━━━━━━━━━━━━━━━━━━\n` +
@@ -621,7 +636,8 @@ async function renderDashboard(chatId, messageId) {
     `⏱️ *Son Kontrol:* ${sonKontrolStr}\n` +
     `⏳ *Token Kalan Süre:* ${formatRemainingTime(session.tokenExp)}\n` +
     `━━━━━━━━━━━━━━━━━━━\n` +
-    `Durum: 🔍 *Boş slot aranıyor...* (Her 1 dk'da bir kontrol ediliyor)`;
+    `Durum: ${durumMesaji}`;
+
 
   if (messageId) {
     await safeEditMessage(chatId, messageId, text, { inline_keyboard: keyboard });
@@ -977,6 +993,10 @@ async function taramaYap(chatId) {
     );
 
     if (!randevuVerisi?.hastane || randevuVerisi.hastane.length === 0) {
+      session.lastStatus = "❌ Uygun randevu bulunamadı, bekleniyor...";
+      if (session.statusMsgId) {
+        renderDashboard(chatId, session.statusMsgId).catch(() => {});
+      }
       return; // Randevu yok, devam
     }
 
@@ -1029,6 +1049,7 @@ async function taramaYap(chatId) {
           clearInterval(session.interval);
           session.interval = null;
           session.state = "IDLE";
+          session.lastStatus = "🎉 Randevu Başarıyla Alındı!";
 
           const hekimAdi = `${resp.hekim?.ad || ""} ${resp.hekim?.soyad || ""}`.trim();
           const kurumAdi = resp.kurum?.kurumAdi || enYakinHastane.kurum.kurumAdi;
@@ -1053,12 +1074,18 @@ async function taramaYap(chatId) {
         }
       }
     }
+
+    session.lastStatus = "❌ Hekim bulundu fakat uygun slot yok, bekleniyor...";
+    if (session.statusMsgId) {
+      renderDashboard(chatId, session.statusMsgId).catch(() => {});
+    }
   } catch (err) {
     if (err.response?.status === 401) {
       clearInterval(session.interval);
       session.interval = null;
       session.state = "IDLE";
       session.token = null;
+      session.lastStatus = "⚠️ Oturum Süresi Doldu";
 
       bot.sendMessage(
         chatId,
@@ -1071,9 +1098,36 @@ async function taramaYap(chatId) {
     }
 
     if (err.response?.data?.errors?.[0]?.kodu === "RND4010") {
-      return; // Slot bulunamadı, normal
+      session.lastStatus = "❌ Uygun randevu bulunamadı, bekleniyor...";
+      if (session.statusMsgId) {
+        renderDashboard(chatId, session.statusMsgId).catch(() => {});
+      }
+      return;
     }
+
+    // Beklenmeyen API Hatası
+    const errDetail =
+      err.response?.data?.errors?.[0]?.mesaj ||
+      err.response?.data?.message ||
+      err.message ||
+      "Bilinmeyen API Hatası";
+    const errCode = err.response?.data?.errors?.[0]?.kodu || err.response?.status || "HATA";
+
+    session.lastStatus = `⚠️ Hata [${errCode}]: ${errDetail}`;
+    if (session.statusMsgId) {
+      renderDashboard(chatId, session.statusMsgId).catch(() => {});
+    }
+
+    bot.sendMessage(
+      chatId,
+      `⚠️ *MHRS API Hatası Alındı (${session.attempts}. Deneme):*\n\n` +
+        `• *Hata Kodu:* \`${errCode}\`\n` +
+        `• *Detay:* \`${errDetail}\`\n\n` +
+        `Sistem durdurulmadı, 1 dakika sonra tekrar denemeye devam edecek. Taramayı iptal etmek isterseniz /durdur yazabilirsiniz.`,
+      { parse_mode: "Markdown" }
+    );
 
     console.error(`[Chat ${chatId}] Randevu kontrol hatası:`, err.message);
   }
 }
+
