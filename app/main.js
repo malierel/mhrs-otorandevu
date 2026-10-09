@@ -93,11 +93,14 @@ function showNotification(title, body) {
 }
 
 function createMainWindow() {
+  const appIconPath = path.join(__dirname, "assets", "icon.ico");
+
   mainWindow = new BrowserWindow({
     width: 1050,
     height: 750,
     minWidth: 900,
     minHeight: 650,
+    icon: appIconPath, // Görev çubuğunda ve pencere sol üst köşesinde görünecek ikon
     frame: true, // Standart Windows başlık çubuğu ve kontrolleri (görünürlük garantisi)
     backgroundColor: "#f5f7fb",
     webPreferences: {
@@ -453,6 +456,9 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    // Windows görev çubuğunda ve bildirimlerde doğru ikon ve isimle görünmesini sağlar
+    app.setAppUserModelId("com.mhrs.otorandevu");
+
     createMainWindow();
     createTray();
 
