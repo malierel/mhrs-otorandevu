@@ -1,4 +1,6 @@
 const axios = require("axios");
+const dns = require("dns").promises;
+const tls = require("tls");
 
 const turkceKarakterler = "ğüşöçıİĞÜŞÖÇ";
 const ingilizceKarakterler = "gusociIGUSOC";
@@ -27,6 +29,56 @@ const client = axios.create({
 });
 
 module.exports = {
+  diagnoseMhrsConnection: async () => {
+    const host = "prd.mhrs.gov.tr";
+    const port = 443;
+    const results = {
+      host,
+      dns: null,
+      tls: null,
+    };
+
+    try {
+      const lookup = await dns.lookup(host);
+      results.dns = { success: true, ip: lookup.address, family: lookup.family };
+    } catch (e) {
+      results.dns = { success: false, error: e.message };
+      return results;
+    }
+
+    return new Promise((resolve) => {
+      const socket = tls.connect(
+        {
+          host,
+          port,
+          servername: host,
+          timeout: 7000,
+        },
+        () => {
+          results.tls = {
+            success: true,
+            authorized: socket.authorized,
+            protocol: socket.getProtocol(),
+            cipher: socket.getCipher()?.name,
+          };
+          socket.end();
+          resolve(results);
+        }
+      );
+
+      socket.on("error", (err) => {
+        results.tls = { success: false, error: err.message, code: err.code };
+        resolve(results);
+      });
+
+      socket.on("timeout", () => {
+        results.tls = { success: false, error: "Bağlantı zaman aşımına uğradı (Timeout)" };
+        socket.destroy();
+        resolve(results);
+      });
+    });
+  },
+
   yaziSadele: (cumle) => {
     let yeniStr = "";
     for (let i = 0; i < cumle.length; i++) {

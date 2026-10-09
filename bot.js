@@ -222,7 +222,10 @@ async function processToken(chatId, session, rawInput) {
   bot.sendMessage(chatId, "⏳ Token doğrulanıyor, lütfen bekleyin...");
 
   try {
+    console.log(`[Token Doğrulama] Chat: ${chatId} - MHRS API'ye istek atılıyor...`);
     const randevular = await functions.kullaniciRandevulari(normalized);
+    console.log(`[Token Doğrulama BAŞARILI] Chat: ${chatId}`);
+
     const exp = parseTokenExpiry(normalized);
     session.token = normalized;
     session.tokenExp = exp;
@@ -252,16 +255,67 @@ async function processToken(chatId, session, rawInput) {
 
     bot.sendMessage(chatId, text, { parse_mode: "Markdown", reply_markup: replyMarkup });
   } catch (err) {
+    console.error(`[Token Doğrulama HATASI] Chat: ${chatId}:`, {
+      message: err.message,
+      code: err.code,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      headers: err.response?.headers,
+      data: err.response?.data,
+    });
+
+    console.log(`[MHRS Bağlantı Teşhisi Başlatılıyor...]`);
+    const diag = await functions.diagnoseMhrsConnection();
+    console.log(`[MHRS Bağlantı Teşhisi Sonucu]:`, JSON.stringify(diag, null, 2));
+
     session.state = "IDLE";
+
+    const isReset =
+      (err.code && err.code.includes("ECONNRESET")) ||
+      (diag.tls?.error && diag.tls.error.includes("RESET")) ||
+      diag.tls?.code === "ECONNRESET";
+
     bot.sendMessage(
       chatId,
-      `❌ *Token Geçersiz veya Süresi Dolmuş!*\n\n` +
-        `MHRS API isteği reddetti (${err.response?.status || err.message}).\n` +
-        `Lütfen yeni bir token alıp tekrar deneyin.`,
+      `❌ *Token Doğrulanamadı!*\n\n` +
+        `• *Hata:* \`${err.message}\` (${err.code || err.response?.status || "Bilinmiyor"})\n\n` +
+        `📡 *Sunucu Ağ Teşhisi:*\n` +
+        `• *Hedef:* \`${diag.host}\`\n` +
+        `• *DNS IP:* ${diag.dns?.success ? `✅ ${diag.dns.ip}` : `❌ ${diag.dns?.error}`}\n` +
+        `• *Port 443 / SSL:* ${diag.tls?.success ? `✅ Başarılı (${diag.tls.protocol})` : `❌ ${diag.tls?.error || diag.tls?.code}`}\n\n` +
+        (isReset
+          ? `⚠️ *Kesin Teşhis:* Sağlık Bakanlığı güvenlik duvarı, Render sunucusunun yurt dışı IP adresini doğrudan engellemektedir (TCP Connection Reset).`
+          : ""),
       { parse_mode: "Markdown" }
     );
   }
 }
+
+// /ping veya /test komutu (Ağ teşhisi)
+bot.onText(/\/ping|\/test/, async (msg) => {
+  const chatId = msg.chat.id;
+  bot.sendMessage(chatId, "📡 MHRS sunucu bağlantısı teşhis ediliyor, lütfen bekleyin...");
+  console.log(`[/ping] Ağ teşhisi başlatıldı...`);
+  const diag = await functions.diagnoseMhrsConnection();
+  console.log(`[/ping Sonucu]:`, JSON.stringify(diag, null, 2));
+
+  const isReset =
+    (diag.tls?.error && diag.tls.error.includes("RESET")) ||
+    diag.tls?.code === "ECONNRESET";
+
+  bot.sendMessage(
+    chatId,
+    `📡 *MHRS Sunucu Bağlantı Raporu:*\n\n` +
+      `• *Hedef:* \`${diag.host}\`\n` +
+      `• *DNS Çözümleme:* ${diag.dns?.success ? `✅ Başarılı (${diag.dns.ip})` : `❌ Hata (${diag.dns?.error})`}\n` +
+      `• *Port 443 (SSL/TLS):* ${diag.tls?.success ? `✅ Bağlantı Başarılı (${diag.tls.protocol})` : `❌ Bağlantı Kesildi: \`${diag.tls?.error || diag.tls?.code}\``}\n\n` +
+      (isReset
+        ? `⚠️ *Durum:* Sağlık Bakanlığı, yurt dışı sunucu IP'lerine erişim engeli (Geo-IP Blocking) uygulamaktadır.`
+        : ""),
+    { parse_mode: "Markdown" }
+  );
+});
+
 
 // /randevu komutu
 bot.onText(/\/randevu/, async (msg) => {
