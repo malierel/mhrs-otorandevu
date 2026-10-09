@@ -6,6 +6,8 @@ on:
       - feat/tauri-webview2
     tags:
       - 'v*-tauri'
+      - 'tauri*'
+      - 'v*'
   workflow_dispatch:
 
 permissions:
