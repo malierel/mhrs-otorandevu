@@ -37,6 +37,9 @@ function loadConfig() {
     baslangicTarihi: moment().format("YYYY-MM-DD"),
     bitisTarihi: moment().add(15, "days").format("YYYY-MM-DD"),
     izinVerilenGunler: [1, 2, 3, 4, 5, 6, 7],
+    tumGun: true,
+    baslangicSaat: "09:00",
+    bitisSaat: "17:00",
     otomatikAl: true,
   };
 }
@@ -95,20 +98,31 @@ function createMainWindow() {
     height: 750,
     minWidth: 900,
     minHeight: 650,
-    frame: false, // Özel şık MHRS başlık barı için
-    backgroundColor: "#f4f6f9",
+    frame: true, // Standart Windows başlık çubuğu ve kontrolleri (görünürlük garantisi)
+    backgroundColor: "#f5f7fb",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    show: false,
+    show: true,
   });
 
+  console.log("Pencere oluşturuldu, dosya yükleniyor...");
   mainWindow.loadFile(path.join(__dirname, "index.html"));
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
+  mainWindow.webContents.on("did-finish-load", () => {
+    console.log("Arayüz (index.html) başarıyla yüklendi.");
+  });
+
+  mainWindow.webContents.on("did-fail-load", (_e, errorCode, errorDescription) => {
+    console.error("Yükleme hatası:", errorCode, errorDescription);
+  });
+
+  // Simge durumuna küçültüldüğünde (Minimize) sistem tepsisine (Tray) gizle
+  mainWindow.on("minimize", (event) => {
+    event.preventDefault();
+    mainWindow.hide();
   });
 
   // Pencereyi kapatınca tamamen kapatmak yerine sistem tepsisine (Tray) küçült
@@ -116,29 +130,19 @@ function createMainWindow() {
     if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
-      if (tray) {
-        tray.displayBalloon?.({
-          title: "MHRS Oto Randevu",
-          content: "Uygulama arka planda çalışmaya devam ediyor.",
-        });
-      }
     }
   });
 }
 
 function createTray() {
-  // Basit 16x16 ikon veya data url
-  const iconPath = path.join(__dirname, "assets", "icon.png");
-  let trayIcon;
-  if (fs.existsSync(iconPath)) {
-    trayIcon = nativeImage.createFromPath(iconPath);
-  } else {
-    // Boş placeholder veya transparan ikon
-    trayIcon = nativeImage.createEmpty();
-  }
+  try {
+    const icoPath = path.join(__dirname, "assets", "icon.ico");
+    const pngPath = path.join(__dirname, "assets", "icon.png");
+    const trayIconPath = fs.existsSync(icoPath) ? icoPath : pngPath;
+    const trayIcon = nativeImage.createFromPath(trayIconPath);
 
-  tray = new Tray(trayIcon);
-  tray.setToolTip("MHRS Otomatik Randevu Asistanı");
+    tray = new Tray(trayIcon);
+    tray.setToolTip("MHRS Otomatik Randevu Asistanı");
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -181,6 +185,9 @@ function createTray() {
       }
     }
   });
+  } catch (err) {
+    console.warn("Tray oluşturulurken uyarı:", err.message);
+  }
 }
 
 // MHRS Randevu Tarama Mantığı
@@ -215,103 +222,141 @@ async function executeSearchIteration() {
       bitisStr
     );
 
-    const kurumKlinikSlot = slotResponse?.kurumKlinikSlotList || [];
+    // MHRS sonuçları "hastane" veya "semt" dizisi içinde döner
+    const hastaneList = slotResponse?.hastane || [];
+    const semtList = slotResponse?.semt || [];
+    const tumKurumlar = [...hastaneList, ...semtList];
 
-    if (kurumKlinikSlot.length === 0) {
+    if (tumKurumlar.length === 0) {
       sendLog("warning", `Boş randevu bulunamadı. (Son kontrol: ${lastCheckTime})`);
       scheduleNextRun();
       return;
     }
 
-    sendLog("success", `🎯 Randevu imkanı tespit edildi! Detaylar taranıyor...`);
+    sendLog("success", `🎯 ${tumKurumlar.length} hekim/kurumda boş randevu imkanı tespit edildi! Detaylar taranıyor...`);
 
-    // Slotları tara
+    // En yakın tarihli olanlara göre sırala
+    tumKurumlar.sort((a, b) => {
+      const tA = a.baslangicZamani ? new Date(a.baslangicZamani).getTime() : 0;
+      const tB = b.baslangicZamani ? new Date(b.baslangicZamani).getTime() : 0;
+      return tA - tB;
+    });
+
     let booked = false;
 
-    for (const kurum of kurumKlinikSlot) {
+    for (const item of tumKurumlar) {
       if (booked) break;
-      const hastaneAdi = kurum.kurum?.kurumAdi || "Bilinmeyen Hastane";
+      const hastaneAdi = item.kurum?.kurumAdi || item.kurum?.kurumKisaAdi || "Hastane";
+      const hekimAdi = item.hekim ? `${item.hekim.ad} ${item.hekim.soyad}`.trim() : "Hekim";
+      const kurumId = item.kurum?.mhrsKurumId;
+      const hekimId = item.hekim?.mhrsHekimId;
 
-      for (const hekim of kurum.hekimSlotList || []) {
-        if (booked) break;
-        const hekimAdi = hekim.hekim?.kullaniciAdi || "Hekim";
-        const kurumId = kurum.kurum?.mhrsKurumId;
-        const hekimId = hekim.hekim?.mhrsHekimId;
+      if (!kurumId || !hekimId) continue;
 
-        sendLog("info", `${hastaneAdi} - ${hekimAdi} detayları sorgulanıyor...`);
+      sendLog("info", `${hastaneAdi} - Dr. ${hekimAdi} saat detayları sorgulanıyor...`);
 
-        try {
-          const hekimDetay = await functions.hekimAra(
-            config.token,
-            Number(config.ilPlaka),
-            config.cinsiyet || "F",
-            Number(config.klinikId),
-            kurumId,
-            hekimId
-          );
+      try {
+        const hekimVerisi = await functions.hekimAra(
+          config.token,
+          Number(config.ilPlaka),
+          config.cinsiyet || "F",
+          Number(config.klinikId),
+          kurumId,
+          hekimId
+        );
 
-          for (const yer of hekimDetay?.muayeneYeriSlotList || []) {
+        const hekimList = Array.isArray(hekimVerisi) ? hekimVerisi : [hekimVerisi];
+
+        for (const hekimObj of hekimList) {
+          if (booked) break;
+          // hekimSlotList veya doğrudan muayeneYeriSlotList
+          const hekimSlotList = hekimObj.hekimSlotList || [hekimObj];
+
+          for (const hekimSlot of hekimSlotList) {
             if (booked) break;
-            for (const saat of yer.saatSlotList || []) {
+            for (const yerSlot of hekimSlot.muayeneYeriSlotList || []) {
               if (booked) break;
-              if (!saat.bos) continue;
+              for (const saatSlot of yerSlot.saatSlotList || []) {
+                if (booked) break;
+                if (!saatSlot.bos) continue;
 
-              for (const slot of saat.slotList || []) {
-                if (!slot.bos) continue;
+                // Slot listesi nesne veya dizi olabilir
+                const rawSlots = saatSlot.slotList;
+                const slotArray = Array.isArray(rawSlots) ? rawSlots : Object.values(rawSlots || {});
 
-                const slotTarihi = moment(slot.baslangicZamani);
-                const gunNumarasi = slotTarihi.isoWeekday(); // 1=Pzt, 7=Paz
+                for (const slotObj of slotArray) {
+                  if (booked) break;
+                  // slot yapısı ya doğrudan slotObj ya da slotObj.slot
+                  const slot = slotObj.slot || slotObj;
+                  if (!slot || slot.bos === false) continue;
 
-                if (config.izinVerilenGunler && !config.izinVerilenGunler.includes(gunNumarasi)) {
-                  continue;
-                }
+                  const slotTarihi = moment(slot.baslangicZamani);
+                  const gunNumarasi = slotTarihi.isoWeekday(); // 1=Pzt, 7=Paz
+                  const gunIsimleri = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+                  const slotGunAdi = gunIsimleri[gunNumarasi - 1];
+                  const slotSaatStr = slotTarihi.format("HH:mm");
 
-                sendLog("success", `🎉 UYGUN SLOT BULUNDU: ${hekimAdi} | ${slot.baslangicZamani}`);
-
-                if (config.otomatikAl) {
-                  sendLog("info", `Randevu onaylanıyor... Lütfen bekleyin.`);
-                  try {
-                    await functions.randevuAl(
-                      config.token,
-                      slot.id,
-                      slot.fkCetvelId,
-                      slot.baslangicZamani,
-                      slot.bitisZamani
-                    );
-
-                    const basariMesaj = `Randevunuz Başarıyla Alındı!\n${hekimAdi}\n${hastaneAdi}\nTarih: ${slot.baslangicZamani}`;
-                    sendLog("success", `✅ ${basariMesaj.replace(/\n/g, " ")}`);
-
-                    showNotification("🎉 MHRS Randevusu Alındı!", `${hekimAdi} - ${slot.baslangicZamani} (${hastaneAdi})`);
-
-                    if (mainWindow && !mainWindow.isDestroyed()) {
-                      mainWindow.webContents.send("appointment-booked", {
-                        hekim: hekimAdi,
-                        hastane: hastaneAdi,
-                        tarih: slot.baslangicZamani,
-                      });
-                    }
-
-                    booked = true;
-                    stopSearchTask();
-                    return;
-                  } catch (err) {
-                    sendLog("error", `Randevu onaylanırken hata oluştu: ${err.response?.data?.errors?.[0]?.mesaj || err.message}`);
+                  // 1. Gün Filtresi Kontrolü
+                  if (config.izinVerilenGunler && !config.izinVerilenGunler.includes(gunNumarasi)) {
+                    sendLog("warning", `ℹ️ Randevu bulundu (${slot.baslangicZamani} - ${slotGunAdi}) fakat izin verilen günlere uymuyor.`);
+                    continue;
                   }
-                } else {
-                  showNotification("🔔 Uygun Randevu Bulundu!", `${hekimAdi} - ${slot.baslangicZamani}`);
+
+                  // 2. Saat Dilimi Kontrolü
+                  if (!config.tumGun && config.baslangicSaat && config.bitisSaat) {
+                    if (slotSaatStr < config.baslangicSaat || slotSaatStr > config.bitisSaat) {
+                      sendLog("warning", `ℹ️ Randevu bulundu (${slot.baslangicZamani}) fakat saat diliminize (${config.baslangicSaat} - ${config.bitisSaat}) uymuyor.`);
+                      continue;
+                    }
+                  }
+
+                  sendLog("success", `🎉 UYGUN SLOT BULUNDU: Dr. ${hekimAdi} | ${slot.baslangicZamani}`);
+
+                  if (config.otomatikAl) {
+                    sendLog("info", `Randevu onaylanıyor... Lütfen bekleyin.`);
+                    try {
+                      await functions.randevuAl(
+                        config.token,
+                        slot.id,
+                        slot.fkCetvelId,
+                        slot.baslangicZamani,
+                        slot.bitisZamani
+                      );
+
+                      const basariMesaj = `Randevunuz Başarıyla Alındı!\nDr. ${hekimAdi}\n${hastaneAdi}\nTarih: ${slot.baslangicZamani}`;
+                      sendLog("success", `✅ ${basariMesaj.replace(/\n/g, " ")}`);
+
+                      showNotification("🎉 MHRS Randevusu Alındı!", `Dr. ${hekimAdi} - ${slot.baslangicZamani} (${hastaneAdi})`);
+
+                      if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send("appointment-booked", {
+                          hekim: `Dr. ${hekimAdi}`,
+                          hastane: hastaneAdi,
+                          tarih: slot.baslangicZamani,
+                        });
+                      }
+
+                      booked = true;
+                      stopSearchTask();
+                      return;
+                    } catch (err) {
+                      sendLog("error", `Randevu onaylanırken hata oluştu: ${err.response?.data?.errors?.[0]?.mesaj || err.message}`);
+                    }
+                  } else {
+                    showNotification("🔔 Uygun Randevu Bulundu!", `Dr. ${hekimAdi} - ${slot.baslangicZamani}`);
+                  }
                 }
               }
             }
           }
-        } catch (hErr) {
-          sendLog("warning", `Hekim detay hatası: ${hErr.message}`);
         }
+      } catch (hErr) {
+        sendLog("warning", `Hekim detay hatası: ${hErr.message}`);
       }
     }
 
     if (!booked) {
-      sendLog("warning", `İstenen gün/saat kriterlerine uygun boş slot kalmamış. 1 dk sonra tekrar kontrol edilecek.`);
+      sendLog("warning", `İstenen gün ve kriterlere uygun boş slot kalmamış. 1 dk sonra tekrar kontrol edilecek.`);
       scheduleNextRun();
     }
   } catch (err) {

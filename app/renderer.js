@@ -82,6 +82,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  const chkAllDay = document.getElementById("chkAllDay");
+  const timeInputsContainer = document.getElementById("timeInputsContainer");
+  const timeStart = document.getElementById("timeStart");
+  const timeEnd = document.getElementById("timeEnd");
+
+  // Tüm gün onay kutusu değiştiğinde
+  chkAllDay.addEventListener("change", () => {
+    if (chkAllDay.checked) {
+      timeInputsContainer.style.opacity = "0.45";
+      timeInputsContainer.style.pointerEvents = "none";
+    } else {
+      timeInputsContainer.style.opacity = "1";
+      timeInputsContainer.style.pointerEvents = "auto";
+    }
+  });
+
   // Yapılandırmayı yükle
   const config = await window.api.getConfig();
   if (config.token) {
@@ -96,6 +112,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   if (config.baslangicTarihi) dateStart.value = config.baslangicTarihi;
   if (config.bitisTarihi) dateEnd.value = config.bitisTarihi;
+  if (config.tumGun !== undefined) {
+    chkAllDay.checked = config.tumGun;
+    if (config.tumGun) {
+      timeInputsContainer.style.opacity = "0.45";
+      timeInputsContainer.style.pointerEvents = "none";
+    } else {
+      timeInputsContainer.style.opacity = "1";
+      timeInputsContainer.style.pointerEvents = "auto";
+    }
+  }
+  if (config.baslangicSaat) timeStart.value = config.baslangicSaat;
+  if (config.bitisSaat) timeEnd.value = config.bitisSaat;
   if (config.izinVerilenGunler) {
     activeDays = config.izinVerilenGunler;
     dayPills.forEach(p => {
@@ -137,9 +165,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       selectCity.innerHTML = `<option value="">İller yükleniyor...</option>`;
       const res = await window.api.loadCities();
-      const cities = res?.data || [];
+      console.log("Gelen iller verisi:", res);
+      // MHRS API doğrudan array veya { data: [...] } dönebilir
+      const cities = Array.isArray(res) ? res : (res?.data || []);
       selectCity.innerHTML = "";
       
+      if (cities.length === 0) {
+        selectCity.innerHTML = `<option value="">İller bulunamadı (Yeniden deneyin)</option>`;
+        appendLog("warning", "İl listesi boş döndü.");
+        return;
+      }
+
+      // Alfabetik sırala
+      cities.sort((a, b) => (a.text || "").localeCompare(b.text || "", "tr"));
+
       cities.forEach(item => {
         const opt = document.createElement("option");
         opt.value = item.value;
@@ -149,6 +188,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         selectCity.appendChild(opt);
       });
+
+      appendLog("info", `${cities.length} il başarıyla listelendi.`);
 
       // İlk yüklemede ilçeleri getir
       if (selectCity.value) {
@@ -164,7 +205,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       selectDistrict.innerHTML = `<option value="-1">İlçeler yükleniyor...</option>`;
       const res = await window.api.loadDistricts(plaka);
-      const districts = res?.data || [];
+      const districts = Array.isArray(res) ? res : (res?.data || []);
       
       selectDistrict.innerHTML = `<option value="-1">Fark Etmez (Tüm İlçeler)</option>`;
       districts.forEach(item => {
@@ -187,18 +228,36 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadClinicsList(plaka, ilceId, selectedKlinik) {
     try {
       selectClinic.innerHTML = `<option value="">Klinikler yükleniyor...</option>`;
-      const clinics = await window.api.loadClinics(plaka, ilceId);
+      const res = await window.api.loadClinics(plaka, ilceId);
+      const rawClinics = Array.isArray(res) ? res : (res?.data || []);
+      
       selectClinic.innerHTML = `<option value="">Klinik Seçiniz...</option>`;
       
-      (clinics || []).forEach(item => {
+      if (rawClinics.length === 0) {
+        selectClinic.innerHTML = `<option value="">Klinik bulunamadı</option>`;
+        return;
+      }
+
+      // MHRS API select-input nesnesi: { value: 123, text: "Göz Hastalıkları" } veya { mhrsKlinikId, klinikAdi }
+      const clinics = rawClinics.map(item => ({
+        id: item.value !== undefined ? item.value : (item.mhrsKlinikId || item.id),
+        name: item.text || item.klinikAdi || item.adi || "Bilinmeyen Klinik"
+      }));
+
+      // Alfabetik sırala
+      clinics.sort((a, b) => a.name.localeCompare(b.name, "tr"));
+
+      clinics.forEach(item => {
         const opt = document.createElement("option");
-        opt.value = item.mhrsKlinikId;
-        opt.textContent = item.klinikAdi;
-        if (selectedKlinik && String(selectedKlinik) === String(item.mhrsKlinikId)) {
+        opt.value = item.id;
+        opt.textContent = item.name;
+        if (selectedKlinik && String(selectedKlinik) === String(item.id)) {
           opt.selected = true;
         }
         selectClinic.appendChild(opt);
       });
+
+      appendLog("info", `${clinics.length} klinik yüklendi.`);
     } catch (e) {
       appendLog("error", `Klinikler yüklenemedi: ${e.message}`);
     }
@@ -239,6 +298,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         baslangicTarihi: dateStart.value,
         bitisTarihi: dateEnd.value,
         izinVerilenGunler: activeDays,
+        tumGun: chkAllDay.checked,
+        baslangicSaat: timeStart.value || "09:00",
+        bitisSaat: timeEnd.value || "17:00",
         otomatikAl: true,
       };
 

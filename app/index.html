@@ -381,7 +381,6 @@
       transform: translateY(-1px);
     }
 
-    /* Log Konsolu (Terminal) */
     .log-container {
       flex: 1;
       background: #0f172a;
@@ -391,6 +390,7 @@
       flex-direction: column;
       overflow: hidden;
       border: 1px solid #1e293b;
+      user-select: text; /* Seçilebilir ve kopyalanabilir */
     }
 
     .log-header {
@@ -402,6 +402,7 @@
       color: #94a3b8;
       font-size: 12px;
       font-weight: 600;
+      user-select: none;
     }
 
     .log-tools {
@@ -424,11 +425,14 @@
       font-size: 12px;
       line-height: 1.6;
       color: #e2e8f0;
+      user-select: text !important; /* Seçim ve kopyalama açık */
+      cursor: text;
     }
 
     .log-entry {
       margin-bottom: 4px;
       word-break: break-all;
+      user-select: text !important;
     }
 
     .log-time {
@@ -548,6 +552,21 @@
           <div class="day-pill active" data-day="5">Cum</div>
           <div class="day-pill active" data-day="6">Cmt</div>
           <div class="day-pill active" data-day="7">Paz</div>
+        </div>
+      </div>
+
+      <!-- Saat Dilimi Filtresi -->
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label>Kabul Edilen Saat Dilimi</label>
+          <label style="font-size: 11px; font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--mhrs-red);">
+            <input type="checkbox" id="chkAllDay" checked style="cursor: pointer; width: 14px; height: 14px;">
+            <span>Tüm Gün (Fark Etmez)</span>
+          </label>
+        </div>
+        <div class="dates-grid" id="timeInputsContainer" style="opacity: 0.45; pointer-events: none; transition: opacity 0.2s;">
+          <input type="time" id="timeStart" value="09:00">
+          <input type="time" id="timeEnd" value="17:00">
         </div>
       </div>
 
