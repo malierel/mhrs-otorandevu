@@ -1,34 +1,42 @@
 # 🩺 MHRS Otomatik Randevu Asistanı (Windows Masaüstü Uygulaması)
 
-T.C. Sağlık Bakanlığı MHRS (Merkezi Hekim Randevu Sistemi) için geliştirilmiş modern, hafif ve arka planda sessizce çalışan Windows masaüstü randevu yakalama asistanı.
+T.C. Sağlık Bakanlığı MHRS (Merkezi Hekim Randevu Sistemi) için geliştirilmiş modern, hafif, kullanıcı dostu ve arka planda sessizce çalışan Windows masaüstü randevu yakalama asistanı.
 
-İstediğiniz il, ilçe, poliklinik, hekim cinsiyeti, kabul edilen günler ve saat aralığı kriterlerine göre MHRS'yi sürekli tarar; boş slot açıldığı anda randevunuzu otomatik olarak alır ve Windows masaüstü bildirimi gönderir.
+İstediğiniz il, ilçe, poliklinik, hekim cinsiyeti, kabul edilen günler ve saat aralığı kriterlerine göre MHRS'yi düzenli aralıklarla tarar; kriterlerinize uyan boş slot açıldığı anda randevunuzu otomatik olarak alır, Windows masaüstü bildirimi gönderir ve sesli uyarı verir.
 
 ---
 
-## ✨ Özellikler
+## ✨ Öne Çıkan Özellikler
 
-- 🏥 **Resmi MHRS Temalı Modern Arayüz:** Sade, temiz ve resmi MHRS renk paleti (`#c62828`).
-- 📍 **Akıllı ve Kademeli Filtreleme:**
-  - **İl ve İlçe Seçimi:** Alfabetik sıralı tüm iller ve seçilen ile ait dinamik ilçe listesi ("Fark Etmez / Tüm İlçeler" desteği).
-  - **Poliklinik (Klinik):** Seçilen konuma göre aktif poliklinikler.
-  - **Hekim Cinsiyeti:** Fark Etmez / Kadın / Erkek.
-  - **Tarih Aralığı:** Başlangıç ve bitiş takvimi.
-  - **Kabul Edilen Günler:** Haftanın istenen günleri (Pazartesi - Pazar).
-  - **Saat Dilimi Filtresi:** İstenen saat aralığı (örn: `09:00 - 12:30`) veya saat sınırı olmadan ilk randevuyu yakalayan **"Tüm Gün (Fark Etmez)"** modu.
-- 🔕 **Sistem Tepsisi (System Tray):**
-  - Pencere simge durumuna küçültüldüğünde (`−`) veya kapatıldığında (`✕`) görev çubuğunu işgal etmez; doğrudan sağ alttaki **Gizli Simgeler (Tray)** alanına gizlenir.
-  - Tepsideki MHRS logosuna çift tıklayarak pencereyi anında geri açabilir, sağ tık menüsünden taramayı yönetebilir veya çıkış yapabilirsiniz.
-- 🔔 **Windows Masaüstü Bildirimleri (Toast):**
-  - Randevu başarıyla onaylandığında Windows sağ alt köşesinde sesli toast bildirimi patlar (Hekim adı, hastane ve saat bilgisiyle).
-- 💻 **Canlı Konsol (Terminal):**
-  - Taranan slotları, deneme sayılarını ve durumu milisaniyelik anlık akıtır.
-  - Log metinleri fareyle **seçilebilir ve kopyalanabilir** (`Ctrl + C`).
-  - Hangi gün/saat filtresine takıldığı gibi durumlar detaylı loglanır.
-- 💾 **Kalıcı Ayarlar:**
-  - Token, filtreler ve tercihleriniz Windows AppData dizininde saklanır; uygulamayı her açtığınızda kaldığınız yerden hazır gelir.
-- ⚡ **Hafif ve Doğrudan Bağlantı:**
-  - Proxy/VPN gerektirmez, doğrudan ev internetiniz üzerinden bağlandığı için Sağlık Bakanlığı WAF/güvenlik duvarına takılmaz.
+### 🎯 Gelişmiş Slot İzleme & Canlı Kart Görünümü
+- **Doktor Bazında Birleşik Kartlar:** Bir doktora ait birden fazla gün ve saat tespit edildiğinde hepsi doktor ve hastane bazında tek bir kart çatısı altında toplanır.
+- **Tarih & Saat Hapları (Pills):** Uygun saatler (🟢), saat aralığı dışı (⏳), izin verilmeyen gün (⚪) ve alınan randevu (✅) gibi durumlar renk kodlu saat etiketleriyle gösterilir.
+- **Canlı Doktor Filtreleme (Combobox):** Slotlar sekmesindeki filtre kutusundan tek tıkla hekim listesi açılır veya klavyeden yazılarak anlık filtrelenir. Hızlı temizle (`✕`) butonuyla filtre tek hamlede sıfırlanabilir.
+- **Anlık Sayaçlar:** Filtrelenen hekim sayısı ve tespit edilen toplam boş saat sayısı anlık olarak istatistik çubuğunda güncellenir.
+- **Yüksek Performans:** Yüzlerce randevu slotu gelse dahi `DocumentFragment` ve render kısıtlaması (throttle) sayesinde arayüz donmaz ve akıcı çalışır.
+
+### 📍 Akıllı ve Kademeli Arama Kriterleri
+- **Arama Yapılabilir Combobox'lar:** İl, ilçe ve klinik alanlarında hem açılır listeden seçim yapılabilir hem de yazarak anında arama yapılabilir.
+- **MHRS 15 Gün Kısıtlaması Koruması:** MHRS'nin en fazla 15 gün ileriye izin verme kuralı hem arayüzde (tarih seçicilerde dinamik min/max sınırları ve hızlı tarih çipleri) hem de arka plan doğrulama katmanında güvenceye alınmıştır.
+- **İl ve İlçe Seçimi:** Alfabetik sıralı tüm iller ve seçilen ile ait dinamik ilçe listesi ("Fark Etmez / Tüm İlçeler" desteği).
+- **Hekim Cinsiyeti:** Fark Etmez / Kadın / Erkek.
+- **Kabul Edilen Günler:** Haftanın istenen günleri (Pazartesi - Pazar).
+- **Saat Dilimi Filtresi:** İstenen saat aralığı (örn: `09:00 - 12:30`) veya saat sınırı olmadan ilk randevuyu yakalayan **"Tüm Gün"** modu.
+
+### 🔕 Sistem Tepsisi (System Tray) & Bildirimler
+- **Arka Planda Sessiz Çalışma:** Pencere simge durumuna küçültüldüğünde (`−`) veya kapatıldığında (`✕`) görev çubuğunu işgal etmez; doğrudan sağ alttaki **Gizli Simgeler (Tray)** alanına gizlenir.
+- **Tepsi Menüsü:** Tepsideki MHRS logosuna çift tıklayarak pencereyi açabilir, sağ tık menüsünden taramayı yönetebilir veya uygulamadan çıkış yapabilirsiniz.
+- **Windows Toast & Sesli Bildirim:** Randevu yakalandığında Windows masaüstü bildirimi açılır ve başarı melodisi çalar.
+
+### 💻 Canlı Konsol (Terminal) & Filtreleme
+- Taranan slotları, deneme sayılarını ve durumu milisaniyelik anlık akıtır.
+- Log filtre sekmeleri: **Tümü**, **🎯 Slotlar** ve **❌ Hatalar**.
+- Otomatik kaydırma açma/kapama (`⬇️ Oto-Kaydır`) ve logları panoya tek tıkla kopyalama (`📋 Kopyala`) araçları.
+
+### 🔐 Güvenlik ve Kalıcı Ayarlar
+- **DPAPI Token Şifreleme:** MHRS Bearer token'ınız Windows DPAPI (`safeStorage`) ile şifrelenerek saklanır, düz metin olarak diskte tutulmaz.
+- **Canlı Token Süre Sayacı:** Token'ın son geçerlilik tarihi JWT çözümlemesiyle anlık olarak hesaplanır ve ekranda geri sayım olarak gösterilir.
+- **Doğrudan Bağlantı:** Proxy/VPN gerektirmez, doğrudan ev internetiniz üzerinden güvenle çalışır.
 
 ---
 
