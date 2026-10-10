@@ -25,6 +25,13 @@ function validateSearchCriteria(criteria) {
     if (criteria.baslangicTarihi > criteria.bitisTarihi) {
       return { valid: false, error: "Başlangıç tarihi bitiş tarihinden sonra olamaz." };
     }
+
+    const tStart = new Date(criteria.baslangicTarihi).getTime();
+    const tEnd = new Date(criteria.bitisTarihi).getTime();
+    const diffDays = Math.round((tEnd - tStart) / (1000 * 60 * 60 * 24));
+    if (diffDays > 15) {
+      return { valid: false, error: "MHRS sistemi en fazla 15 günlük tarih aralığına izin vermektedir." };
+    }
   }
 
   if (!criteria.tumGun && criteria.baslangicSaat && criteria.bitisSaat) {

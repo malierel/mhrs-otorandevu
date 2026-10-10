@@ -23,4 +23,5 @@ contextBridge.exposeInMainWorld("api", {
   onLog: (callback) => ipcRenderer.on("log-message", (_event, data) => callback(data)),
   onStatusUpdate: (callback) => ipcRenderer.on("status-update", (_event, data) => callback(data)),
   onAppointmentBooked: (callback) => ipcRenderer.on("appointment-booked", (_event, data) => callback(data)),
+  onSlotFound: (callback) => ipcRenderer.on("slot-found", (_event, data) => callback(data)),
 });

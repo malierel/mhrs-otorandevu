@@ -328,7 +328,8 @@
 
     .metrics-group {
       display: flex;
-      gap: 20px;
+      align-items: center;
+      gap: 16px;
     }
 
     .metric-box {
@@ -336,7 +337,7 @@
     }
 
     .metric-val {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       color: #1e293b;
     }
@@ -344,6 +345,176 @@
     .metric-lbl {
       font-size: 11px;
       color: var(--text-muted);
+    }
+
+    /* Döngüsel İlerleme Çubuğu & Sayaç */
+    .countdown-widget {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .countdown-ring-box {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .countdown-svg {
+      transform: rotate(-90deg);
+      width: 36px;
+      height: 36px;
+    }
+
+    .countdown-circle-bg {
+      fill: none;
+      stroke: #e2e8f0;
+      stroke-width: 3.5;
+    }
+
+    .countdown-circle-progress {
+      fill: none;
+      stroke: #3b82f6;
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      stroke-dasharray: 100;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+    }
+
+    .countdown-sec {
+      position: absolute;
+      font-size: 10px;
+      font-weight: 700;
+      color: #1e293b;
+      font-family: monospace;
+    }
+
+    .countdown-text-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .countdown-lbl {
+      font-size: 10px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .countdown-status {
+      font-size: 11px;
+      font-weight: 700;
+      color: #3b82f6;
+    }
+
+    /* Hızlı Tarih Butonları */
+    .quick-date-group {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .quick-date-chip {
+      padding: 4px 8px;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-date-chip:hover {
+      background: #fee2e2;
+      border-color: var(--mhrs-light-red);
+      color: var(--mhrs-red);
+    }
+
+    /* Arama Yapılabilir Combobox Seçim Alanı */
+    .combo-wrapper {
+      position: relative;
+      width: 100%;
+    }
+
+    .combo-input {
+      width: 100%;
+      padding: 9px 34px 9px 12px;
+      border-radius: 8px;
+      border: 1.5px solid var(--border-color);
+      font-size: 13px;
+      color: var(--text-main);
+      outline: none;
+      background: #fafafa;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .combo-input:focus {
+      border-color: var(--mhrs-red);
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.12);
+      cursor: text;
+    }
+
+    .combo-arrow {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      font-size: 11px;
+      color: #94a3b8;
+      transition: transform 0.2s;
+    }
+
+    .combo-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 220px;
+      overflow-y: auto;
+      background: #ffffff;
+      border: 1.5px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+      z-index: 999;
+      display: none;
+    }
+
+    .combo-dropdown.open {
+      display: block;
+    }
+
+    .combo-option {
+      padding: 8px 12px;
+      font-size: 12.5px;
+      color: #334155;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .combo-option:hover, .combo-option.selected {
+      background: #fef2f2;
+      color: var(--mhrs-red);
+      font-weight: 600;
+    }
+
+    .combo-option.empty {
+      color: #94a3b8;
+      font-style: italic;
+      cursor: default;
     }
 
     /* Başlat / Durdur Butonu */
@@ -396,7 +567,7 @@
 
     .log-header {
       background: #1e293b;
-      padding: 10px 16px;
+      padding: 8px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -404,18 +575,65 @@
       font-size: 12px;
       font-weight: 600;
       user-select: none;
+      border-bottom: 1px solid #334155;
+    }
+
+    .log-filter-tabs {
+      display: flex;
+      gap: 4px;
+      background: #0f172a;
+      padding: 2px;
+      border-radius: 6px;
+    }
+
+    .log-filter-btn {
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .log-filter-btn.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .log-filter-btn:hover:not(.active) {
+      color: #e2e8f0;
     }
 
     .log-tools {
       display: flex;
+      align-items: center;
       gap: 10px;
     }
 
-    .log-link {
-      color: #38bdf8;
-      cursor: pointer;
+    .log-btn-tool {
+      background: #334155;
+      color: #e2e8f0;
+      border: none;
+      padding: 3px 8px;
       font-size: 11px;
-      text-decoration: underline;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s;
+    }
+
+    .log-btn-tool:hover {
+      background: #475569;
+    }
+
+    .log-btn-tool.active-toggle {
+      background: #10b981;
+      color: white;
     }
 
     .log-body {
@@ -425,9 +643,188 @@
       font-family: "Cascadia Code", "Fira Code", monospace;
       font-size: 12px;
       line-height: 1.6;
-      color: #e2e8f0;
-      user-select: text !important; /* Seçim ve kopyalama açık */
-      cursor: text;
+    }
+
+    /* Gruplanmış Hekim Slot Kartları & Saat Hapları */
+    .slots-cards-container {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      display: none;
+      background: #0f172a;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .slots-stats-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1e293b;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      color: #94a3b8;
+      font-weight: 600;
+      border: 1px solid #334155;
+      margin-bottom: 8px;
+    }
+
+    .slots-stats-items {
+      display: flex;
+      gap: 14px;
+    }
+
+    .slot-stat-tag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .slot-doctor-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      transition: border-color 0.2s;
+    }
+
+    .slot-doctor-card:hover {
+      border-color: #475569;
+    }
+
+    .slot-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 8px;
+    }
+
+    .slot-doc-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .slot-doc-name {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .slot-doc-hospital {
+      font-size: 11.5px;
+      color: #94a3b8;
+    }
+
+    .slot-doc-date {
+      font-size: 11px;
+      color: #38bdf8;
+      font-weight: 600;
+      font-family: monospace;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 3px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    .slot-days-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slot-day-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.5);
+      padding: 6px 10px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .slot-day-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: #38bdf8;
+      font-family: monospace;
+      min-width: 130px;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .slot-times-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      flex: 1;
+    }
+
+    .slot-time-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-weight: 600;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .pill-uygun {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.35);
+    }
+
+    .pill-alindi {
+      background: #059669;
+      color: #ffffff;
+      border-color: #10b981;
+      font-weight: 700;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+    }
+
+    .pill-saat-uymadi {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border-color: rgba(245, 158, 11, 0.3);
+      opacity: 0.85;
+    }
+
+    .pill-gun-uymadi {
+      background: rgba(100, 116, 139, 0.15);
+      color: #94a3b8;
+      border-color: rgba(100, 116, 139, 0.3);
+      opacity: 0.75;
+    }
+
+    .pill-hata {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    .slots-empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: #64748b;
+      font-size: 13px;
     }
 
     .log-entry {
@@ -498,25 +895,40 @@
       <!-- İl Seçimi -->
       <div class="form-group">
         <label>İl</label>
-        <select id="selectCity">
-          <option value="">İller yükleniyor...</option>
-        </select>
+        <div class="combo-wrapper" id="comboCityWrapper">
+          <input type="text" id="comboCityInput" class="combo-input" placeholder="İl seçin veya yazarak arayın..." autocomplete="off">
+          <span class="combo-arrow">▼</span>
+          <div class="combo-dropdown" id="comboCityDropdown"></div>
+          <select id="selectCity" style="display: none;">
+            <option value="">İller yükleniyor...</option>
+          </select>
+        </div>
       </div>
 
       <!-- İlçe Seçimi -->
       <div class="form-group">
         <label>İlçe</label>
-        <select id="selectDistrict">
-          <option value="-1">Fark Etmez (Tüm İlçeler)</option>
-        </select>
+        <div class="combo-wrapper" id="comboDistrictWrapper">
+          <input type="text" id="comboDistrictInput" class="combo-input" placeholder="Fark Etmez (Tüm İlçeler)" autocomplete="off">
+          <span class="combo-arrow">▼</span>
+          <div class="combo-dropdown" id="comboDistrictDropdown"></div>
+          <select id="selectDistrict" style="display: none;">
+            <option value="-1">Fark Etmez (Tüm İlçeler)</option>
+          </select>
+        </div>
       </div>
 
       <!-- Klinik Seçimi -->
       <div class="form-group">
         <label>Klinik (Poliklinik)</label>
-        <select id="selectClinic">
-          <option value="">Önce il/ilçe seçiniz...</option>
-        </select>
+        <div class="combo-wrapper" id="comboClinicWrapper">
+          <input type="text" id="comboClinicInput" class="combo-input" placeholder="Klinik seçin veya yazarak arayın..." autocomplete="off">
+          <span class="combo-arrow">▼</span>
+          <div class="combo-dropdown" id="comboClinicDropdown"></div>
+          <select id="selectClinic" style="display: none;">
+            <option value="">Önce il/ilçe seçiniz...</option>
+          </select>
+        </div>
       </div>
 
       <!-- Hekim Cinsiyeti -->
@@ -529,12 +941,20 @@
         </div>
       </div>
 
-      <!-- Tarih Aralığı -->
+      <!-- Tarih Aralığı & Hızlı Seçim Butonları -->
       <div class="form-group">
-        <label>Tarih Aralığı</label>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label>Tarih Aralığı</label>
+          <span style="font-size: 11px; color: #64748b; font-weight: 600;">(MHRS Kuralı: Maksimum 15 Gün)</span>
+        </div>
         <div class="dates-grid">
           <input type="date" id="dateStart">
           <input type="date" id="dateEnd">
+        </div>
+        <div class="quick-date-group">
+          <button type="button" class="quick-date-chip" data-days="3">⚡ İlk 3 Gün</button>
+          <button type="button" class="quick-date-chip" data-days="7">📅 İlk 7 Gün</button>
+          <button type="button" class="quick-date-chip" data-days="15">🌟 Önümüzdeki 15 Gün</button>
         </div>
       </div>
 
@@ -592,6 +1012,21 @@
         </div>
 
         <div class="metrics-group">
+          <!-- Döngüsel Sayaç Bileşeni -->
+          <div class="countdown-widget" id="countdownWidget" style="display: none;">
+            <div class="countdown-ring-box">
+              <svg class="countdown-svg" viewBox="0 0 36 36">
+                <circle class="countdown-circle-bg" cx="18" cy="18" r="15.5"></circle>
+                <circle class="countdown-circle-progress" id="countdownCircle" cx="18" cy="18" r="15.5"></circle>
+              </svg>
+              <span class="countdown-sec" id="countdownSecText">60</span>
+            </div>
+            <div class="countdown-text-wrap">
+              <span class="countdown-lbl">Geri Sayım</span>
+              <span class="countdown-status" id="countdownStatusText">Taranıyor...</span>
+            </div>
+          </div>
+
           <div class="metric-box">
             <div class="metric-val" id="metricAttempts">0</div>
             <div class="metric-lbl">Deneme</div>
@@ -611,15 +1046,41 @@
       <!-- Canlı Log Ekranı -->
       <div class="log-container">
         <div class="log-header">
-          <span>Canlı İşlem Günlüğü (Terminal)</span>
+          <div class="log-filter-tabs">
+            <button type="button" class="log-filter-btn active" data-filter="all">Tümü</button>
+            <button type="button" class="log-filter-btn" data-filter="slot">🎯 Slotlar</button>
+            <button type="button" class="log-filter-btn" data-filter="error">❌ Hatalar</button>
+          </div>
           <div class="log-tools">
-            <span class="log-link" id="btnClearLog">Temizle</span>
+            <button type="button" class="log-btn-tool active-toggle" id="btnToggleAutoScroll" title="Otomatik Kaydırma">
+              <span>⬇️ Oto-Kaydır: Açık</span>
+            </button>
+            <button type="button" class="log-btn-tool" id="btnCopyLogs" title="Tüm Logları Kopyala">
+              <span>📋 Kopyala</span>
+            </button>
+            <button type="button" class="log-btn-tool" id="btnClearLog" title="Logları Temizle">
+              <span>🗑️ Temizle</span>
+            </button>
           </div>
         </div>
         <div class="log-body" id="logBody">
           <div class="log-entry">
             <span class="log-time">[Sistem]</span>
             <span class="log-info">MHRS Otomatik Randevu Asistanı hazır. Lütfen token ve filtrelerinizi ayarlayın.</span>
+          </div>
+        </div>
+
+        <!-- Tespit Edilen Gruplanmış Slot Kartları -->
+        <div class="slots-cards-container" id="slotsCardsContainer">
+          <div class="slots-stats-bar" id="slotsStatsBar" style="display: none;">
+            <div class="slots-stats-items">
+              <span class="slot-stat-tag">👨‍⚕️ <span id="statDoctorsCount">0</span> Hekim</span>
+              <span class="slot-stat-tag">⚡ <span id="statSlotsCount">0</span> Boş Saat</span>
+            </div>
+            <span style="color: #38bdf8; font-size: 11px;">En son tespit edilenler</span>
+          </div>
+          <div id="slotsCardsList">
+            <div class="slots-empty-state">Henüz tespit edilen uygun randevu slotu bulunmuyor.</div>
           </div>
         </div>
       </div>

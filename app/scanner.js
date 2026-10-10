@@ -13,24 +13,36 @@ let callbacks = {
   sendStatusUpdate: () => {},
   showNotification: () => {},
   onAppointmentBooked: () => {},
+  onSlotFound: () => {},
 };
 
 function initScanner(cbs) {
   callbacks = { ...callbacks, ...cbs };
 }
 
+let nextRunAt = null;
+let totalDelayMs = 0;
+
 function getScannerState() {
   return {
     active: searchActive,
     attempts: searchAttempts,
     lastCheckTime,
+    nextRunAt,
+    totalDelayMs,
   };
 }
 
 function scheduleNextRun(delayMs = 60000) {
   if (!searchActive) return;
   if (searchTimer) clearTimeout(searchTimer);
+  totalDelayMs = delayMs;
+  nextRunAt = Date.now() + delayMs;
+  callbacks.sendStatusUpdate();
   searchTimer = setTimeout(() => {
+    nextRunAt = null;
+    totalDelayMs = 0;
+    callbacks.sendStatusUpdate();
     executeSearchIteration();
   }, delayMs);
 }
@@ -137,12 +149,26 @@ async function executeSearchIteration() {
 
                   if (config.izinVerilenGunler && !config.izinVerilenGunler.includes(gunNumarasi)) {
                     callbacks.sendLog("warning", `ℹ️ Randevu bulundu (${slot.baslangicZamani} - ${slotGunAdi}) fakat izin verilen günlere uymuyor.`);
+                    callbacks.onSlotFound({
+                      hekim: `Dr. ${hekimAdi}`,
+                      hastane: hastaneAdi,
+                      tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
+                      status: "gun-uymadi",
+                      statusText: "İstenmeyen Gün",
+                    });
                     continue;
                   }
 
                   if (!config.tumGun && config.baslangicSaat && config.bitisSaat) {
                     if (slotSaatStr < config.baslangicSaat || slotSaatStr > config.bitisSaat) {
                       callbacks.sendLog("warning", `ℹ️ Randevu bulundu (${slot.baslangicZamani}) fakat saat diliminize (${config.baslangicSaat} - ${config.bitisSaat}) uymuyor.`);
+                      callbacks.onSlotFound({
+                        hekim: `Dr. ${hekimAdi}`,
+                        hastane: hastaneAdi,
+                        tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
+                        status: "saat-uymadi",
+                        statusText: "Saat Uymadı",
+                      });
                       continue;
                     }
                   }
@@ -163,6 +189,14 @@ async function executeSearchIteration() {
                       const basariMesaj = `Randevunuz Başarıyla Alındı!\nDr. ${hekimAdi}\n${hastaneAdi}\nTarih: ${slot.baslangicZamani}`;
                       callbacks.sendLog("success", `✅ ${basariMesaj.replace(/\n/g, " ")}`);
 
+                      callbacks.onSlotFound({
+                        hekim: `Dr. ${hekimAdi}`,
+                        hastane: hastaneAdi,
+                        tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
+                        status: "alindi",
+                        statusText: "Başarıyla Alındı",
+                      });
+
                       callbacks.showNotification("🎉 MHRS Randevusu Alındı!", `Dr. ${hekimAdi} - ${slot.baslangicZamani} (${hastaneAdi})`);
                       callbacks.onAppointmentBooked({
                         hekim: `Dr. ${hekimAdi}`,
@@ -178,6 +212,14 @@ async function executeSearchIteration() {
                       const errCode = apiErr?.kodu;
                       const errMsg = apiErr?.mesaj || err.message;
                       callbacks.sendLog("error", `Randevu onaylanırken hata oluştu: ${errMsg}`);
+
+                      callbacks.onSlotFound({
+                        hekim: `Dr. ${hekimAdi}`,
+                        hastane: hastaneAdi,
+                        tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
+                        status: "hata",
+                        statusText: "Onay Başarısız",
+                      });
 
                       if (errCode === "RND6034" || (errMsg && errMsg.includes("daha önce oluşturulmuş randevu"))) {
                         callbacks.sendLog("warning", "⚠️ Bu saat diliminde zaten mevcut bir randevunuz olduğu için tarama otomatik durduruldu.");
@@ -234,6 +276,8 @@ function startSearchTask(criteria) {
   searchActive = true;
   searchAttempts = 0;
   consecutiveNetworkErrors = 0;
+  nextRunAt = null;
+  totalDelayMs = 0;
   callbacks.sendStatusUpdate();
   callbacks.sendLog("info", "🚀 Randevu tarama görevi başlatıldı.");
   executeSearchIteration();
@@ -243,6 +287,8 @@ function startSearchTask(criteria) {
 function stopSearchTask() {
   searchActive = false;
   consecutiveNetworkErrors = 0;
+  nextRunAt = null;
+  totalDelayMs = 0;
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = null;
   callbacks.sendStatusUpdate();

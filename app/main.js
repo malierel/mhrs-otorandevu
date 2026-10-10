@@ -166,6 +166,11 @@ if (!gotTheLock) {
           mainWindow.webContents.send("appointment-booked", appt);
         }
       },
+      onSlotFound: (slot) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("slot-found", slot);
+        }
+      },
     });
 
     createMainWindow();
