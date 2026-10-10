@@ -960,13 +960,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     playSuccessSound();
   });
 
-  window.api.onSlotFound((slot) => {
-    // Aynı slot zaten eklenmişse mükerrer ekleme
-    const exists = discoveredSlotsList.some(s => s.hekim === slot.hekim && s.tarih === slot.tarih && s.hastane === slot.hastane);
-    if (!exists) {
-      discoveredSlotsList.unshift(slot); // En yeni slot en üstte
+  let slotRenderTimeout = null;
+  function scheduleGroupedSlotsRender() {
+    if (slotRenderTimeout) return;
+    slotRenderTimeout = setTimeout(() => {
+      slotRenderTimeout = null;
       if (currentLogFilter === "slot") {
         renderGroupedSlotCards();
+      }
+    }, 150); // 150ms throttle: Yoğun veri akışında arayüzü asla dondurmaz
+  }
+
+  window.api.onSlotFound((slot) => {
+    // Aynı slot zaten eklenmişse mükerrer ekleme (Tüm slot verisi korunur)
+    const exists = discoveredSlotsList.some(s => s.hekim === slot.hekim && s.tarih === slot.tarih && s.hastane === slot.hastane);
+    if (!exists) {
+      discoveredSlotsList.unshift(slot);
+      if (currentLogFilter === "slot") {
+        scheduleGroupedSlotsRender();
       }
     }
   });

@@ -99,7 +99,7 @@ async function executeSearchIteration() {
     let booked = false;
 
     for (const item of tumKurumlar) {
-      if (booked) break;
+      if (!searchActive || booked) break;
       const hastaneAdi = item.kurum?.kurumAdi || item.kurum?.kurumKisaAdi || "Hastane";
       const hekimAdi = item.hekim ? `${item.hekim.ad} ${item.hekim.soyad}`.trim() : "Hekim";
       const kurumId = item.kurum?.mhrsKurumId;
@@ -110,6 +110,7 @@ async function executeSearchIteration() {
       callbacks.sendLog("info", `${hastaneAdi} - Dr. ${hekimAdi} saat detayları sorgulanıyor...`);
 
       try {
+        if (!searchActive) break;
         const hekimVerisi = await functions.hekimAra(
           config.token,
           Number(config.ilPlaka),
@@ -118,26 +119,27 @@ async function executeSearchIteration() {
           kurumId,
           hekimId
         );
+        if (!searchActive) break;
 
         const hekimList = Array.isArray(hekimVerisi) ? hekimVerisi : [hekimVerisi];
 
         for (const hekimObj of hekimList) {
-          if (booked) break;
+          if (!searchActive || booked) break;
           const hekimSlotList = hekimObj.hekimSlotList || [hekimObj];
 
           for (const hekimSlot of hekimSlotList) {
-            if (booked) break;
+            if (!searchActive || booked) break;
             for (const yerSlot of hekimSlot.muayeneYeriSlotList || []) {
-              if (booked) break;
+              if (!searchActive || booked) break;
               for (const saatSlot of yerSlot.saatSlotList || []) {
-                if (booked) break;
+                if (!searchActive || booked) break;
                 if (!saatSlot.bos) continue;
 
                 const rawSlots = saatSlot.slotList;
                 const slotArray = Array.isArray(rawSlots) ? rawSlots : Object.values(rawSlots || {});
 
                 for (const slotObj of slotArray) {
-                  if (booked) break;
+                  if (!searchActive || booked) break;
                   const slot = slotObj.slot || slotObj;
                   if (!slot || slot.bos === false) continue;
 
