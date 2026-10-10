@@ -39,8 +39,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const slotsCardsContainer = document.getElementById("slotsCardsContainer");
   const slotsCardsList = document.getElementById("slotsCardsList");
   const slotsStatsBar = document.getElementById("slotsStatsBar");
+  const slotsFilterToolbar = document.getElementById("slotsFilterToolbar");
   const statDoctorsCount = document.getElementById("statDoctorsCount");
   const statSlotsCount = document.getElementById("statSlotsCount");
+
+  const filterSlotDoctorInput = document.getElementById("filterSlotDoctorInput");
+  const filterSlotDoctorDropdown = document.getElementById("filterSlotDoctorDropdown");
+  const btnClearSlotDoctor = document.getElementById("btnClearSlotDoctor");
+  const filterSlotDoctorArrow = document.getElementById("filterSlotDoctorArrow");
 
   const btnClearLog = document.getElementById("btnClearLog");
   const btnCopyLogs = document.getElementById("btnCopyLogs");
@@ -56,6 +62,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   let autoScrollEnabled = true;
   let currentLogFilter = "all";
   let discoveredSlotsList = [];
+
+  // Slotlar Sekmesi Filtre Durumu (Yalnızca Hekim Adı)
+  let slotFilterCriteria = {
+    doctor: "",
+  };
 
   // Log Ekleme Yardımcısı (Bellek sızıntısını önlemek için en fazla 300 satır tutar)
   const MAX_LOG_ENTRIES = 300;
@@ -91,10 +102,112 @@ document.addEventListener("DOMContentLoaded", async () => {
     return true;
   }
 
-  // Gruplanmış Hekim Kartları & Saat Hapları Görünümü
+  // Hekim Combobox Dropdown Listesini Oluşturma Yardımcısı
+  function renderSlotDoctorDropdown(filterQuery = "") {
+    const q = (filterQuery || "").trim().toLocaleLowerCase("tr");
+    filterSlotDoctorDropdown.innerHTML = "";
+
+    // Mevcut slotlardaki tekil hekimleri topla
+    const docSet = new Set();
+    discoveredSlotsList.forEach(s => {
+      if (s.hekim) docSet.add(s.hekim);
+    });
+
+    const docList = Array.from(docSet).sort((a,b) => a.localeCompare(b, "tr"));
+    const filteredDocs = docList.filter(d => d.toLocaleLowerCase("tr").includes(q));
+
+    // "Tüm Hekimler" Sıfırlama Seçeneği
+    const allOpt = document.createElement("div");
+    allOpt.className = "combo-option" + (slotFilterCriteria.doctor === "" ? " selected" : "");
+    allOpt.innerHTML = `<span>👨‍⚕️ Tüm Hekimler</span>`;
+    allOpt.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      slotFilterCriteria.doctor = "";
+      filterSlotDoctorInput.value = "";
+      syncDoctorClearButton();
+      filterSlotDoctorDropdown.classList.remove("open");
+      renderGroupedSlotCards();
+    });
+    filterSlotDoctorDropdown.appendChild(allOpt);
+
+    if (filteredDocs.length === 0 && q !== "") {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "combo-option empty";
+      emptyDiv.textContent = "Eşleşen hekim bulunamadı";
+      filterSlotDoctorDropdown.appendChild(emptyDiv);
+      return;
+    }
+
+    filteredDocs.forEach(docName => {
+      const opt = document.createElement("div");
+      opt.className = "combo-option" + (slotFilterCriteria.doctor === docName ? " selected" : "");
+      opt.textContent = docName;
+      opt.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        slotFilterCriteria.doctor = docName;
+        filterSlotDoctorInput.value = docName;
+        syncDoctorClearButton();
+        filterSlotDoctorDropdown.classList.remove("open");
+        renderGroupedSlotCards();
+      });
+      filterSlotDoctorDropdown.appendChild(opt);
+    });
+  }
+
+  // Slot Filtrelerini Dinle ve Listeyi Anlık Filtrele
+  function updateSlotFilterOptions() {
+    // Dropdown açıksa anlık güncelle
+    if (filterSlotDoctorDropdown.classList.contains("open")) {
+      renderSlotDoctorDropdown(filterSlotDoctorInput.value);
+    }
+  }
+
+  function syncDoctorClearButton() {
+    if (filterSlotDoctorInput.value.trim().length > 0) {
+      btnClearSlotDoctor.style.display = "flex";
+      filterSlotDoctorArrow.style.display = "none";
+    } else {
+      btnClearSlotDoctor.style.display = "none";
+      filterSlotDoctorArrow.style.display = "block";
+    }
+  }
+
+  // Hekim Combobox Olayları
+  filterSlotDoctorInput.addEventListener("focus", () => {
+    renderSlotDoctorDropdown(filterSlotDoctorInput.value);
+    filterSlotDoctorDropdown.classList.add("open");
+  });
+
+  filterSlotDoctorInput.addEventListener("input", (e) => {
+    slotFilterCriteria.doctor = e.target.value.trim();
+    syncDoctorClearButton();
+    renderSlotDoctorDropdown(e.target.value);
+    filterSlotDoctorDropdown.classList.add("open");
+    renderGroupedSlotCards();
+  });
+
+  filterSlotDoctorInput.addEventListener("blur", () => {
+    setTimeout(() => {
+      filterSlotDoctorDropdown.classList.remove("open");
+    }, 180);
+  });
+
+  btnClearSlotDoctor.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    slotFilterCriteria.doctor = "";
+    filterSlotDoctorInput.value = "";
+    syncDoctorClearButton();
+    filterSlotDoctorDropdown.classList.remove("open");
+    renderGroupedSlotCards();
+    filterSlotDoctorInput.focus();
+  });
+
+  // Gruplanmış Hekim Kartları & Saat Hapları Görünümü (Filtreli)
   function renderGroupedSlotCards() {
     slotsCardsList.innerHTML = "";
     if (discoveredSlotsList.length === 0) {
+      slotsFilterToolbar.style.display = "none";
       slotsStatsBar.style.display = "none";
       slotsCardsList.innerHTML = `
         <div class="slots-empty-state">Henüz tespit edilen uygun randevu slotu bulunmuyor.</div>
@@ -102,10 +215,32 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
+    slotsFilterToolbar.style.display = "block";
+
+    // 0. Kriterlere göre filtrele
+    const filteredSlots = discoveredSlotsList.filter(item => {
+      if (slotFilterCriteria.doctor) {
+        const docName = (item.hekim || "").toLocaleLowerCase("tr");
+        const targetDoc = slotFilterCriteria.doctor.toLocaleLowerCase("tr");
+        if (!docName.includes(targetDoc)) return false;
+      }
+      return true;
+    });
+
+    if (filteredSlots.length === 0) {
+      slotsStatsBar.style.display = "flex";
+      statDoctorsCount.textContent = "0";
+      statSlotsCount.textContent = "0";
+      slotsCardsList.innerHTML = `
+        <div class="slots-empty-state">🔍 Seçtiğiniz filtrelere uygun slot bulunamadı.</div>
+      `;
+      return;
+    }
+
     // 1. Bir hekim için tek kart: Hekim + Hastane bazında grupla
     const doctorMap = new Map();
 
-    discoveredSlotsList.forEach(item => {
+    filteredSlots.forEach(item => {
       const parts = item.tarih.split(" ");
       const datePart = parts[0] || ""; // 2026-10-15
       const timePart = parts[1] || ""; // 14:30:00 veya 14:30
@@ -116,6 +251,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         doctorMap.set(docKey, {
           hekim: item.hekim,
           hastane: item.hastane,
+          il: item.il,
+          ilce: item.ilce,
+          klinik: item.klinik,
           daysMap: new Map(),
         });
       }
@@ -160,12 +298,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     statSlotsCount.textContent = totalSlotsCount;
     slotsStatsBar.style.display = "flex";
 
-    // 2. Her hekim için TEK bir kart oluştur
+    // 2. Her hekim için TEK bir kart oluştur (DocumentFragment ile toplu DOM ekleme)
+    const fragment = document.createDocumentFragment();
+
     doctorsList.forEach(doc => {
       const card = document.createElement("div");
       card.className = "slot-doctor-card";
 
-      // Başlık: Hekim Adı ve Hastane
+      // Başlık: Hekim Adı, Hastane ve Klinik
       const headerDiv = document.createElement("div");
       headerDiv.className = "slot-card-header";
       headerDiv.innerHTML = `
@@ -174,7 +314,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <span>👨‍⚕️</span>
             <span>${escapeHtml(doc.hekim)}</span>
           </div>
-          <div class="slot-doc-hospital">🏥 ${escapeHtml(doc.hastane)}</div>
+          <div class="slot-doc-hospital">🏥 ${escapeHtml(doc.hastane)} ${doc.ilce ? `(${escapeHtml(doc.ilce)})` : ""} ${doc.klinik ? `• ${escapeHtml(doc.klinik)}` : ""}</div>
         </div>
       `;
       card.appendChild(headerDiv);
@@ -236,8 +376,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
 
       card.appendChild(daysContainer);
-      slotsCardsList.appendChild(card);
+      fragment.appendChild(card);
     });
+
+    slotsCardsList.appendChild(fragment);
   }
 
   function applyLogFilter(filterName) {
@@ -248,6 +390,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       logBody.style.display = "none";
       slotsCardsContainer.style.display = "flex";
       btnToggleAutoScroll.style.display = "none";
+      updateSlotFilterOptions();
       renderGroupedSlotCards();
     } else {
       // Terminal Log Modu
@@ -502,11 +645,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     tokenExpiryTimer = setInterval(tick, 1000);
   }
 
-  // Token doğrulama ve kaydetme
-  btnSaveToken.addEventListener("click", async () => {
-    let rawToken = inputToken.value.trim();
+  async function validateAndActivateToken(rawToken, isAutoStart = false) {
     if (!rawToken) {
-      tokenStatusText.innerHTML = `<span class="badge-bad">❌ Lütfen token yapıştırın!</span>`;
+      if (!isAutoStart) tokenStatusText.innerHTML = `<span class="badge-bad">❌ Lütfen token yapıştırın!</span>`;
       return;
     }
     if (!rawToken.startsWith("Bearer ")) {
@@ -528,7 +669,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       tokenStatusText.innerHTML = `<span class="badge-bad">❌ Geçersiz: ${res.error}</span>`;
       appendLog("error", `Token hatası: ${res.error}`);
     }
+  }
+
+  // Token doğrulama ve kaydetme butonu
+  btnSaveToken.addEventListener("click", () => {
+    validateAndActivateToken(inputToken.value.trim(), false);
   });
+
+  // Eğer token varsa açılışta temiz ve güvenli bir şekilde doğrulamayı başlat
+  if (config.token) {
+    validateAndActivateToken(config.token, true);
+  }
 
   // Doğrudan Seçim Alanı Üzerinde Yazılarak Arama Yapan Combobox Motoru
   let allCitiesData = [];
@@ -966,6 +1117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     slotRenderTimeout = setTimeout(() => {
       slotRenderTimeout = null;
       if (currentLogFilter === "slot") {
+        updateSlotFilterOptions();
         renderGroupedSlotCards();
       }
     }, 150); // 150ms throttle: Yoğun veri akışında arayüzü asla dondurmaz
@@ -982,8 +1134,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Eğer token varsa açılışta hemen doğrulamayı dene
-  if (config.token) {
-    btnSaveToken.click();
-  }
+  // (Başlangıç token doğrulaması validateAndActivateToken ile yukarıda güvenle yapılmaktadır)
 });

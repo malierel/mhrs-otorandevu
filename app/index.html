@@ -656,6 +656,81 @@
       gap: 10px;
     }
 
+    .slots-filter-toolbar {
+      display: block;
+      background: #1e293b;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+    }
+
+    .slot-filter-select, .slot-filter-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #f1f5f9;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .slot-filter-select:focus, .slot-filter-input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+
+    .slot-filter-clear-btn {
+      position: absolute;
+      right: 28px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #334155;
+      color: #cbd5e1;
+      border: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      font-size: 10px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: all 0.15s;
+    }
+
+    .slot-filter-clear-btn:hover {
+      background: #ef4444;
+      color: #ffffff;
+    }
+
+    .slot-doctor-dropdown {
+      background: #1e293b !important;
+      border-color: #475569 !important;
+      color: #f1f5f9;
+      max-height: 200px;
+    }
+
+    .slot-doctor-dropdown .combo-option {
+      color: #cbd5e1;
+      padding: 7px 10px;
+      font-size: 11.5px;
+    }
+
+    .slot-doctor-dropdown .combo-option:hover,
+    .slot-doctor-dropdown .combo-option.selected {
+      background: #334155 !important;
+      color: #38bdf8 !important;
+    }
+
+    .slot-doctor-dropdown .combo-option.empty {
+      color: #64748b;
+    }
+
     .slots-stats-bar {
       display: flex;
       align-items: center;
@@ -667,7 +742,7 @@
       color: #94a3b8;
       font-weight: 600;
       border: 1px solid #334155;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
 
     .slots-stats-items {
@@ -1072,12 +1147,22 @@
 
         <!-- Tespit Edilen Gruplanmış Slot Kartları -->
         <div class="slots-cards-container" id="slotsCardsContainer">
+          <!-- Canlı Slot Filtre Araç Çubuğu: Yalnızca Hekim Adı Filtresi -->
+          <div class="slots-filter-toolbar" id="slotsFilterToolbar" style="display: none;">
+            <div class="combo-wrapper" style="width: 100%;">
+              <input type="text" id="filterSlotDoctorInput" class="slot-filter-input" placeholder="🔍 Doktor adı ile ara veya listeden seçin..." autocomplete="off">
+              <button type="button" id="btnClearSlotDoctor" class="slot-filter-clear-btn" title="Filtreyi Temizle" style="display: none;">✕</button>
+              <span class="combo-arrow" id="filterSlotDoctorArrow" style="color: #94a3b8; right: 10px;">▼</span>
+              <div class="combo-dropdown slot-doctor-dropdown" id="filterSlotDoctorDropdown"></div>
+            </div>
+          </div>
+
           <div class="slots-stats-bar" id="slotsStatsBar" style="display: none;">
             <div class="slots-stats-items">
               <span class="slot-stat-tag">👨‍⚕️ <span id="statDoctorsCount">0</span> Hekim</span>
               <span class="slot-stat-tag">⚡ <span id="statSlotsCount">0</span> Boş Saat</span>
             </div>
-            <span style="color: #38bdf8; font-size: 11px;">En son tespit edilenler</span>
+            <span style="color: #38bdf8; font-size: 11px;">Anlık Filtrelenenler</span>
           </div>
           <div id="slotsCardsList">
             <div class="slots-empty-state">Henüz tespit edilen uygun randevu slotu bulunmuyor.</div>

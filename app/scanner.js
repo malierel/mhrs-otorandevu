@@ -105,6 +105,20 @@ async function executeSearchIteration() {
       const kurumId = item.kurum?.mhrsKurumId;
       const hekimId = item.hekim?.mhrsHekimId;
 
+      // İlçe tespiti: kurum nesnesindeki ilçe alanları, hastane adından çıkarım veya config
+      let kurumIlce = item.kurum?.ilce?.adi || item.kurum?.ilceAdi || item.ilceAdi || item.kurum?.ilce;
+      if (!kurumIlce && hastaneAdi) {
+        // "BURSA NİLÜFER DEVLET HASTANESİ" gibi isimlerden ilçeyi tahmin etme
+        const match = hastaneAdi.match(/([A-ZÇĞİÖŞÜa-zçğıöşü]+)\s+(?:DEVLET|ŞEHİR|EĞİTİM|AĞIZ|İLÇE|ENTEGRE)/i);
+        if (match && match[1] && match[1].length > 3) {
+          kurumIlce = match[1];
+        }
+      }
+      if (!kurumIlce && config.ilceAdi && config.ilceAdi !== "Fark Etmez (Tüm İlçeler)") {
+        kurumIlce = config.ilceAdi;
+      }
+      kurumIlce = kurumIlce || "";
+
       if (!kurumId || !hekimId) continue;
 
       callbacks.sendLog("info", `${hastaneAdi} - Dr. ${hekimAdi} saat detayları sorgulanıyor...`);
@@ -154,6 +168,9 @@ async function executeSearchIteration() {
                     callbacks.onSlotFound({
                       hekim: `Dr. ${hekimAdi}`,
                       hastane: hastaneAdi,
+                      il: config.ilAdi || "",
+                      ilce: kurumIlce || config.ilceAdi || "",
+                      klinik: config.klinikAdi || "",
                       tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
                       status: "gun-uymadi",
                       statusText: "İstenmeyen Gün",
@@ -167,6 +184,9 @@ async function executeSearchIteration() {
                       callbacks.onSlotFound({
                         hekim: `Dr. ${hekimAdi}`,
                         hastane: hastaneAdi,
+                        il: config.ilAdi || "",
+                        ilce: kurumIlce || config.ilceAdi || "",
+                        klinik: config.klinikAdi || "",
                         tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
                         status: "saat-uymadi",
                         statusText: "Saat Uymadı",
@@ -194,6 +214,9 @@ async function executeSearchIteration() {
                       callbacks.onSlotFound({
                         hekim: `Dr. ${hekimAdi}`,
                         hastane: hastaneAdi,
+                        il: config.ilAdi || "",
+                        ilce: kurumIlce || config.ilceAdi || "",
+                        klinik: config.klinikAdi || "",
                         tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
                         status: "alindi",
                         statusText: "Başarıyla Alındı",
@@ -218,6 +241,9 @@ async function executeSearchIteration() {
                       callbacks.onSlotFound({
                         hekim: `Dr. ${hekimAdi}`,
                         hastane: hastaneAdi,
+                        il: config.ilAdi || "",
+                        ilce: kurumIlce || config.ilceAdi || "",
+                        klinik: config.klinikAdi || "",
                         tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
                         status: "hata",
                         statusText: "Onay Başarısız",
@@ -231,6 +257,16 @@ async function executeSearchIteration() {
                       }
                     }
                   } else {
+                    callbacks.onSlotFound({
+                      hekim: `Dr. ${hekimAdi}`,
+                      hastane: hastaneAdi,
+                      il: config.ilAdi || "",
+                      ilce: kurumIlce || config.ilceAdi || "",
+                      klinik: config.klinikAdi || "",
+                      tarih: `${slot.baslangicZamani} (${slotGunAdi})`,
+                      status: "uygun",
+                      statusText: "Müsait",
+                    });
                     callbacks.showNotification("🔔 Uygun Randevu Bulundu!", `Dr. ${hekimAdi} - ${slot.baslangicZamani}`);
                   }
                 }
